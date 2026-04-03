@@ -566,14 +566,9 @@ body {
   padding: 5px 20px;
 }
 
-/* --- Build Info --- */
+/* --- Build Info (inside status bar) --- */
 #build-info {
-  position: fixed;
-  bottom: 32px;
-  right: 10px;
-  font-size: 13px;
-  color: var(--text-primary);
-  pointer-events: none;
-  z-index: 10;
-  opacity: 0.8;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: monospace;
 }
