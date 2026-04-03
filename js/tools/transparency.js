@@ -91,13 +91,8 @@ PE.tools.transparency = {
   _buildPanelHTML() {
     return `
       <div class="panel-section">
-        <div class="panel-section-title">
-          <i class="fa-solid fa-palette"></i> Background Color
-        </div>
-        <div class="panel-row">
-          <button class="btn-panel" id="tool-eyedropper">
-            <i class="fa-solid fa-eye-dropper"></i> Extract
-          </button>
+        <div class="panel-section-title selectable" id="tool-eyedropper">
+          <i class="fa-solid fa-eye-dropper"></i> Extract Background Color
         </div>
         <div class="panel-row">
           <span class="panel-label">Fill Color</span>
@@ -107,7 +102,7 @@ PE.tools.transparency = {
       </div>
 
       <div class="panel-section">
-        <div class="panel-section-title">
+        <div class="panel-section-title selectable" id="tool-select">
           <i class="fa-solid fa-vector-square"></i> Select Region
         </div>
         <div class="panel-row">
@@ -121,17 +116,6 @@ PE.tools.transparency = {
           <input type="range" class="panel-slider" id="tool-border"
                  min="0" max="10" value="${this.borderRadius}">
           <span class="panel-slider-value" id="tool-border-val">${this.borderRadius}</span>
-        </div>
-        <div class="panel-row">
-          <button class="btn-panel" id="tool-select">
-            <i class="fa-solid fa-crosshairs"></i> Select
-          </button>
-        </div>
-      </div>
-
-      <div class="panel-section">
-        <div class="panel-section-title">
-          <i class="fa-solid fa-eraser"></i> Make Transparent
         </div>
         <div class="panel-row">
           <button class="btn-panel btn-action" id="tool-make-transparent" disabled>
@@ -174,17 +158,17 @@ PE.tools.transparency = {
     const container = PE.dom.container;
     container.classList.remove('cursor-crosshair', 'cursor-eyedropper');
 
-    const eyeBtn = document.getElementById('tool-eyedropper');
-    const selBtn = document.getElementById('tool-select');
+    const eyeTitle = document.getElementById('tool-eyedropper');
+    const selTitle = document.getElementById('tool-select');
 
     if (name === 'eyedropper') {
       container.classList.add('cursor-eyedropper');
-      if (eyeBtn) eyeBtn.classList.add('btn-action');
-      if (selBtn) selBtn.classList.remove('btn-action');
+      if (eyeTitle) eyeTitle.classList.add('active');
+      if (selTitle) selTitle.classList.remove('active');
     } else {
       container.classList.add('cursor-crosshair');
-      if (selBtn) selBtn.classList.add('btn-action');
-      if (eyeBtn) eyeBtn.classList.remove('btn-action');
+      if (selTitle) selTitle.classList.add('active');
+      if (eyeTitle) eyeTitle.classList.remove('active');
     }
   },
 

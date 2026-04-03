@@ -205,6 +205,29 @@ body {
   font-size: 12px;
 }
 
+/* Selectable section title (acts as a mode toggle button) */
+.panel-section-title.selectable {
+  cursor: pointer;
+  padding: 6px 8px;
+  margin: -4px -8px 10px -8px;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.panel-section-title.selectable:hover {
+  background: var(--bg-light);
+  color: var(--text-primary);
+}
+
+.panel-section-title.selectable.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.panel-section-title.selectable.active i {
+  color: #fff;
+}
+
 /* Panel Row */
 .panel-row {
   display: flex;
