@@ -959,6 +959,10 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     performUndo();
   }
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault();
+    document.getElementById('btn-make-transparent').click();
+  }
 });
 </script>
 </body>
