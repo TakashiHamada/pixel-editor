@@ -137,6 +137,16 @@ body {
   color: #fff;
 }
 #loading.visible { display: flex; }
+
+#build-info {
+  position: fixed;
+  top: 4px;
+  right: 8px;
+  font-size: 11px;
+  color: #666;
+  pointer-events: none;
+  z-index: 50;
+}
 </style>
 </head>
 <body>
@@ -185,6 +195,7 @@ body {
 </div>
 
 <div id="loading"><span>処理中...</span></div>
+<div id="build-info">Last commit: 2026-04-03 18:03 JST</div>
 
 <input type="file" id="file-input" accept=".png,image/png" style="display:none">
 
