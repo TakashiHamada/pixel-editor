@@ -136,9 +136,9 @@ PE.overlay = {
     const h = PE.state.imgHeight;
     const ctx = PE.dom.overlayCtx;
 
-    // Dark red: rgb(139, 32, 32) — matches --accent
-    const R = 139, G = 32, B = 32;
-    const BASE_ALPHA = 100; // max alpha for interior at full pulse
+    // Vivid red: brighter than --accent for clear visibility
+    const R = 200, G = 40, B = 40;
+    const BASE_ALPHA = 110; // max alpha for interior at full pulse
 
     // Precompute per-pixel alpha multiplier (0.0 - 1.0)
     // Interior = 1.0, Border = fades from 1.0 to 0.0
@@ -165,8 +165,8 @@ PE.overlay = {
     const self = this;
 
     function animate(now) {
-      // Slow sine wave: 2s period, pulse between 0.5 and 1.0
-      const t = (now - self._startTime) / 2000;
+      // Sine wave: 1.2s period, pulse between 0.5 and 1.0
+      const t = (now - self._startTime) / 1200;
       const pulse = 0.75 + 0.25 * Math.sin(t * Math.PI * 2);
 
       for (let j = 0; j < selectedIndices.length; j++) {

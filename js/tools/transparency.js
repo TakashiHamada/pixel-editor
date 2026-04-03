@@ -40,10 +40,10 @@ PE.tools.transparency = {
   },
 
   // Tool-specific state
-  bgColor: [255, 255, 255],
+  bgColor: null,
   tolerance: 32,
   borderRadius: 4,
-  subTool: 'select', // 'eyedropper' | 'select'
+  subTool: 'eyedropper', // 'eyedropper' | 'select'
 
   /**
    * Called when this tool is activated.
@@ -118,7 +118,7 @@ PE.tools.transparency = {
           <span class="panel-slider-value" id="tool-border-val">${this.borderRadius}</span>
         </div>
         <div class="panel-row">
-          <button class="btn-panel btn-action" id="tool-make-transparent" disabled>
+          <button class="btn-panel btn-action btn-compact" id="tool-make-transparent" disabled>
             <i class="fa-solid fa-eraser"></i> Make Transparent
           </button>
         </div>
@@ -173,9 +173,14 @@ PE.tools.transparency = {
   },
 
   _updateColorDisplay() {
-    const hex = '#' + this.bgColor.map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
     const preview = document.getElementById('tool-color-preview');
     const hexEl = document.getElementById('tool-color-hex');
+    if (!this.bgColor) {
+      if (preview) preview.style.background = 'transparent';
+      if (hexEl) hexEl.textContent = '---';
+      return;
+    }
+    const hex = '#' + this.bgColor.map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
     if (preview) preview.style.background = hex;
     if (hexEl) hexEl.textContent = hex;
   },
@@ -189,6 +194,8 @@ PE.tools.transparency = {
     this._updateColorDisplay();
     const hex = '#' + this.bgColor.map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
     PE.log.info(`Picked color: ${hex}`);
+    // Auto-switch to select mode after picking
+    this._setSubTool('select');
   },
 
   // ---- Flood Fill Selection ----
@@ -347,6 +354,10 @@ PE.tools.transparency = {
     const s = PE.state;
     if (!s.imageData || !s.selectionMask) {
       PE.log.warn('Select a region first');
+      return;
+    }
+    if (!this.bgColor) {
+      PE.log.warn('Extract a background color first');
       return;
     }
 
