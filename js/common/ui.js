@@ -182,7 +182,8 @@ PE.overlay = {
       self._timer = requestAnimationFrame(animate);
     }
 
-    this._timer = requestAnimationFrame(animate);
+    // Draw first frame immediately to avoid a blank-frame flicker
+    animate(performance.now());
   },
 };
 
