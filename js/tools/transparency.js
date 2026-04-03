@@ -67,11 +67,22 @@ PE.tools.transparency = {
   },
 
   /**
-   * Handle canvas click.
-   * @param {number} imgX - pixel X coordinate
-   * @param {number} imgY - pixel Y coordinate
-   * @param {MouseEvent} e - original mouse event
+   * Called when Delete/Backspace is pressed.
    */
+  onDelete() {
+    this._makeTransparent();
+  },
+
+  /**
+   * Handle tool-specific keyboard shortcuts.
+   */
+  onKeydown(e) {
+    if (e.key === 'e' || e.key === 'E') this._setSubTool('eyedropper');
+    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey) {
+      this._setSubTool('select');
+    }
+  },
+
   /**
    * Called on mouse move over canvas. Preview color under cursor in eyedropper mode.
    */

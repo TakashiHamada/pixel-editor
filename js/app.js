@@ -163,13 +163,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Delete / Backspace: trigger transparency (if that tool is active)
+    // Delete / Backspace: delegate to active tool's action
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
       const tool = PE.toolRegistry[PE.state.activeTool];
-      if (tool && tool._makeTransparent) {
-        tool._makeTransparent();
-      }
+      if (tool && tool.onDelete) tool.onDelete();
       return;
     }
 
@@ -179,14 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Tool-specific shortcuts for transparency
-    if (PE.state.activeTool === 'transparency') {
-      const tool = PE.tools.transparency;
-      if (e.key === 'e' || e.key === 'E') tool._setSubTool('eyedropper');
-      if (e.key === 's' || e.key === 'S') {
-        if (!e.ctrlKey && !e.metaKey) tool._setSubTool('select');
-      }
-    }
+    // Delegate remaining keys to active tool
+    const tool = PE.toolRegistry[PE.state.activeTool];
+    if (tool && tool.onKeydown) tool.onKeydown(e);
   });
 
   // Activate default tool

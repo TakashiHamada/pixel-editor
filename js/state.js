@@ -15,6 +15,8 @@ PE.state = {
   imgWidth: 0,
   imgHeight: 0,
   fileName: '',
+  fileType: '',
+  fileSize: 0,
 
   // Zoom & Pan
   zoom: 1,
@@ -33,7 +35,4 @@ PE.state = {
   // Selection (shared across tools that use selection)
   selectionMask: null,
   borderDist: null,
-
-  // Marching ants
-  marchingAntsOffset: 0,
 };
