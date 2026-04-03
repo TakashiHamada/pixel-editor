@@ -58,6 +58,13 @@ PE.tools.transparency = {
     }
   },
 
+  _updateMakeTransparentButton() {
+    const btn = document.getElementById('tool-make-transparent');
+    if (btn) {
+      btn.disabled = !PE.state.selectionMask;
+    }
+  },
+
   // ---- Panel HTML ----
   _buildPanelHTML() {
     return `
@@ -110,7 +117,7 @@ PE.tools.transparency = {
           <i class="fa-solid fa-eraser"></i> Make Transparent
         </div>
         <div class="panel-row">
-          <button class="btn-panel btn-action" id="tool-make-transparent">
+          <button class="btn-panel btn-action" id="tool-make-transparent" disabled>
             <i class="fa-solid fa-eraser"></i> Make Transparent
           </button>
         </div>
@@ -330,6 +337,7 @@ PE.tools.transparency = {
         if (expandedMask[i]) count++;
       }
       PE.log.info(`${count} pixels selected` + (additive ? ' (added)' : ''));
+      this._updateMakeTransparentButton();
     }, 10);
   },
 
@@ -518,5 +526,6 @@ PE.tools.transparency = {
     s.borderDist = null;
     PE.overlay.clear();
     PE.log.success('Transparency applied');
+    this._updateMakeTransparentButton();
   },
 };

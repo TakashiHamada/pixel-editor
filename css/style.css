@@ -142,7 +142,7 @@ body {
 /* Commit time display */
 #commit-time {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-family: monospace;
 }
 
@@ -259,8 +259,9 @@ body {
   font-size: 11px;
   font-family: monospace;
   color: var(--text-primary);
-  min-width: 24px;
+  min-width: 30px;
   text-align: right;
+  flex-shrink: 0;
 }
 
 /* Color preview */
