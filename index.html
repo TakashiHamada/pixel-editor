@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web Photo Editor</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #2a2a2a;
+  color: #ddd;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+}
+
+/* Toolbar */
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #333;
+  border-bottom: 1px solid #444;
+  flex-wrap: wrap;
+}
+
+#toolbar button {
+  padding: 6px 14px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #444;
+  color: #ddd;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#toolbar button:hover { background: #555; }
+#toolbar button.active { background: #0078d4; border-color: #0078d4; color: #fff; }
+
+.toolbar-separator {
+  width: 1px;
+  height: 24px;
+  background: #555;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-label {
+  font-size: 12px;
+  color: #aaa;
+}
+
+#toleranceSlider {
+  width: 100px;
+  accent-color: #0078d4;
+}
+
+#toleranceValue {
+  font-size: 12px;
+  min-width: 28px;
+  text-align: right;
+}
+
+#bgColorPreview {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #666;
+  border-radius: 3px;
+  background: #fff;
+}
+
+#bgColorHex {
+  font-size: 12px;
+  font-family: monospace;
+}
+
+/* Canvas area */
+#canvas-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  cursor: crosshair;
+  background:
+    repeating-conic-gradient(#3a3a3a 0% 25%, #333 0% 50%) 0 0 / 20px 20px;
+}
+
+#main-canvas, #overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  image-rendering: pixelated;
+}
+
+#overlay-canvas {
+  pointer-events: none;
+}
+
+/* Status bar */
+#statusbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 12px;
+  background: #333;
+  border-top: 1px solid #444;
+  font-size: 12px;
+  color: #aaa;
+}
+
+/* Cursor styles */
+#canvas-container.tool-eyedropper { cursor: crosshair; }
+#canvas-container.tool-select { cursor: crosshair; }
+#canvas-container.tool-pan { cursor: grab; }
+#canvas-container.tool-pan:active { cursor: grabbing; }
+
+/* Loading overlay */
+#loading {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  font-size: 18px;
+  color: #fff;
+}
+#loading.visible { display: flex; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button id="btn-open" title="画像を開く">開く</button>
+  <div class="toolbar-separator"></div>
+  <button id="btn-eyedropper" title="スポイト: 塗り色を取得">スポイト</button>
+  <button id="btn-select" title="選択: 領域をクリックして選択">選択</button>
+  <div class="toolbar-separator"></div>
+  <button id="btn-make-transparent" title="選択領域を透明化">透明化</button>
+  <div class="toolbar-separator"></div>
+  <button id="btn-download" title="PNGとしてダウンロード">ダウンロード</button>
+  <div class="toolbar-separator"></div>
+  <div class="toolbar-group">
+    <span class="toolbar-label">許容値:</span>
+    <input type="range" id="toleranceSlider" min="1" max="100" value="32">
+    <span id="toleranceValue">32</span>
+  </div>
+  <div class="toolbar-separator"></div>
+  <div class="toolbar-group">
+    <span class="toolbar-label">塗り色:</span>
+    <div id="bgColorPreview"></div>
+    <span id="bgColorHex">#FFFFFF</span>
+  </div>
+</div>
+
+<div id="canvas-container">
+  <canvas id="main-canvas"></canvas>
+  <canvas id="overlay-canvas"></canvas>
+</div>
+
+<div id="statusbar">
+  <span id="status-tool">ツール: -</span>
+  <span id="status-zoom">Zoom: 100%</span>
+  <span id="status-pos">X: - Y: -</span>
+  <span id="status-info"></span>
+</div>
+
+<div id="loading"><span>処理中...</span></div>
+
+<input type="file" id="file-input" accept=".png,image/png" style="display:none">
+
+<script>
+// ============================================================
+// State
+// ============================================================
+const state = {
+  tool: 'select',           // 'eyedropper' | 'select'
+  bgColor: [255, 255, 255], // picked background/fill color
+  tolerance: 32,
+  zoom: 1,
+  panX: 0,
+  panY: 0,
+  imageData: null,           // current ImageData
+  selectionMask: null,       // Uint8Array, 1=selected
+  imgWidth: 0,
+  imgHeight: 0,
+  isPanning: false,
+  panStartX: 0,
+  panStartY: 0,
+  panStartPanX: 0,
+  panStartPanY: 0,
+  marchingAntsOffset: 0,
+};
+
+// ============================================================
+// DOM refs
+// ============================================================
+const container = document.getElementById('canvas-container');
+const mainCanvas = document.getElementById('main-canvas');
+const overlayCanvas = document.getElementById('overlay-canvas');
+const mainCtx = mainCanvas.getContext('2d', { willReadFrequently: true });
+const overlayCtx = overlayCanvas.getContext('2d');
+const fileInput = document.getElementById('file-input');
+const toleranceSlider = document.getElementById('toleranceSlider');
+const toleranceValue = document.getElementById('toleranceValue');
+const bgColorPreview = document.getElementById('bgColorPreview');
+const bgColorHex = document.getElementById('bgColorHex');
+const statusTool = document.getElementById('status-tool');
+const statusZoom = document.getElementById('status-zoom');
+const statusPos = document.getElementById('status-pos');
+const statusInfo = document.getElementById('status-info');
+const loading = document.getElementById('loading');
+
+// ============================================================
+// Tool buttons
+// ============================================================
+const toolButtons = {
+  eyedropper: document.getElementById('btn-eyedropper'),
+  select: document.getElementById('btn-select'),
+};
+
+function setTool(tool) {
+  state.tool = tool;
+  Object.entries(toolButtons).forEach(([k, btn]) => {
+    btn.classList.toggle('active', k === tool);
+  });
+  container.className = `tool-${tool}`;
+  statusTool.textContent = `ツール: ${tool === 'eyedropper' ? 'スポイト' : '選択'}`;
+}
+
+document.getElementById('btn-eyedropper').addEventListener('click', () => setTool('eyedropper'));
+document.getElementById('btn-select').addEventListener('click', () => setTool('select'));
+
+// ============================================================
+// Tolerance
+// ============================================================
+toleranceSlider.addEventListener('input', () => {
+  state.tolerance = parseInt(toleranceSlider.value);
+  toleranceValue.textContent = state.tolerance;
+});
+
+// ============================================================
+// Open file
+// ============================================================
+document.getElementById('btn-open').addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      state.imgWidth = img.width;
+      state.imgHeight = img.height;
+      mainCanvas.width = img.width;
+      mainCanvas.height = img.height;
+      overlayCanvas.width = img.width;
+      overlayCanvas.height = img.height;
+      mainCtx.clearRect(0, 0, img.width, img.height);
+      mainCtx.drawImage(img, 0, 0);
+      state.imageData = mainCtx.getImageData(0, 0, img.width, img.height);
+      state.selectionMask = null;
+      clearOverlay();
+      fitImageToView();
+      statusInfo.textContent = `${img.width} x ${img.height}`;
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  fileInput.value = '';
+});
+
+// ============================================================
+// Zoom & Pan
+// ============================================================
+function fitImageToView() {
+  if (!state.imgWidth) return;
+  const rect = container.getBoundingClientRect();
+  const scaleX = (rect.width - 40) / state.imgWidth;
+  const scaleY = (rect.height - 40) / state.imgHeight;
+  state.zoom = Math.min(scaleX, scaleY, 4);
+  state.panX = (rect.width - state.imgWidth * state.zoom) / 2;
+  state.panY = (rect.height - state.imgHeight * state.zoom) / 2;
+  applyTransform();
+}
+
+function applyTransform() {
+  const t = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
+  mainCanvas.style.transform = t;
+  mainCanvas.style.transformOrigin = '0 0';
+  overlayCanvas.style.transform = t;
+  overlayCanvas.style.transformOrigin = '0 0';
+  statusZoom.textContent = `Zoom: ${Math.round(state.zoom * 100)}%`;
+}
+
+container.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = container.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+
+  // image coords under cursor before zoom
+  const imgX = (mouseX - state.panX) / state.zoom;
+  const imgY = (mouseY - state.panY) / state.zoom;
+
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  state.zoom = Math.max(0.1, Math.min(64, state.zoom * factor));
+
+  // adjust pan so image point stays under cursor
+  state.panX = mouseX - imgX * state.zoom;
+  state.panY = mouseY - imgY * state.zoom;
+
+  applyTransform();
+}, { passive: false });
+
+// Pan with middle button or space+drag
+let spaceDown = false;
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && !e.repeat) {
+    spaceDown = true;
+    container.classList.add('tool-pan');
+  }
+});
+document.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') {
+    spaceDown = false;
+    container.classList.remove('tool-pan');
+  }
+});
+
+container.addEventListener('mousedown', (e) => {
+  if (e.button === 1 || spaceDown) {
+    state.isPanning = true;
+    state.panStartX = e.clientX;
+    state.panStartY = e.clientY;
+    state.panStartPanX = state.panX;
+    state.panStartPanY = state.panY;
+    e.preventDefault();
+    return;
+  }
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (state.isPanning) {
+    state.panX = state.panStartPanX + (e.clientX - state.panStartX);
+    state.panY = state.panStartPanY + (e.clientY - state.panStartY);
+    applyTransform();
+    return;
+  }
+
+  // Update position status
+  const rect = container.getBoundingClientRect();
+  const imgX = Math.floor((e.clientX - rect.left - state.panX) / state.zoom);
+  const imgY = Math.floor((e.clientY - rect.top - state.panY) / state.zoom);
+  if (imgX >= 0 && imgX < state.imgWidth && imgY >= 0 && imgY < state.imgHeight) {
+    statusPos.textContent = `X: ${imgX} Y: ${imgY}`;
+  } else {
+    statusPos.textContent = 'X: - Y: -';
+  }
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (state.isPanning) {
+    state.isPanning = false;
+  }
+});
+
+// ============================================================
+// Canvas click (eyedropper / select)
+// ============================================================
+container.addEventListener('click', (e) => {
+  if (state.isPanning || e.button !== 0 || spaceDown) return;
+  if (!state.imageData) return;
+
+  const rect = container.getBoundingClientRect();
+  const imgX = Math.floor((e.clientX - rect.left - state.panX) / state.zoom);
+  const imgY = Math.floor((e.clientY - rect.top - state.panY) / state.zoom);
+
+  if (imgX < 0 || imgX >= state.imgWidth || imgY < 0 || imgY >= state.imgHeight) return;
+
+  if (state.tool === 'eyedropper') {
+    pickColor(imgX, imgY);
+  } else if (state.tool === 'select') {
+    floodFillSelect(imgX, imgY);
+  }
+});
+
+// ============================================================
+// Eyedropper
+// ============================================================
+function pickColor(x, y) {
+  const d = state.imageData.data;
+  const idx = (y * state.imgWidth + x) * 4;
+  state.bgColor = [d[idx], d[idx + 1], d[idx + 2]];
+  const hex = '#' + state.bgColor.map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
+  bgColorPreview.style.background = hex;
+  bgColorHex.textContent = hex;
+  statusInfo.textContent = `塗り色を取得: ${hex}`;
+}
+
+// ============================================================
+// Flood Fill Selection
+// ============================================================
+function floodFillSelect(startX, startY) {
+  showLoading(true);
+
+  // Use setTimeout to let UI update
+  setTimeout(() => {
+    const w = state.imgWidth;
+    const h = state.imgHeight;
+    const d = state.imageData.data;
+    const mask = new Uint8Array(w * h);
+    const tolerance = state.tolerance;
+    const bg = state.bgColor;
+
+    // Color at start point
+    const startIdx = (startY * w + startX) * 4;
+    const startR = d[startIdx];
+    const startG = d[startIdx + 1];
+    const startB = d[startIdx + 2];
+
+    function colorDistance(idx) {
+      const dr = d[idx] - startR;
+      const dg = d[idx + 1] - startG;
+      const db = d[idx + 2] - startB;
+      return Math.sqrt(dr * dr + dg * dg + db * db);
+    }
+
+    // Scanline flood fill
+    const stack = [[startX, startY]];
+    mask[startY * w + startX] = 1;
+
+    while (stack.length > 0) {
+      const [sx, sy] = stack.pop();
+      // scan left
+      let left = sx;
+      while (left > 0) {
+        const pi = (sy * w + (left - 1)) * 4;
+        if (mask[sy * w + (left - 1)] || colorDistance(pi) > tolerance) break;
+        left--;
+        mask[sy * w + left] = 1;
+      }
+      // scan right
+      let right = sx;
+      while (right < w - 1) {
+        const pi = (sy * w + (right + 1)) * 4;
+        if (mask[sy * w + (right + 1)] || colorDistance(pi) > tolerance) break;
+        right++;
+        mask[sy * w + right] = 1;
+      }
+      // check rows above and below
+      for (let x = left; x <= right; x++) {
+        if (sy > 0) {
+          const ni = ((sy - 1) * w + x);
+          if (!mask[ni] && colorDistance(ni * 4) <= tolerance) {
+            mask[ni] = 1;
+            stack.push([x, sy - 1]);
+          }
+        }
+        if (sy < h - 1) {
+          const ni = ((sy + 1) * w + x);
+          if (!mask[ni] && colorDistance(ni * 4) <= tolerance) {
+            mask[ni] = 1;
+            stack.push([x, sy + 1]);
+          }
+        }
+      }
+    }
+
+    // Expand selection to include anti-aliased border pixels
+    // Find pixels adjacent to the selection that are between bg and line color
+    const expandedMask = new Uint8Array(mask);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (mask[y * w + x]) continue;
+        // Check if adjacent to selection
+        let adj = false;
+        if (x > 0 && mask[y * w + x - 1]) adj = true;
+        if (x < w - 1 && mask[y * w + x + 1]) adj = true;
+        if (y > 0 && mask[(y - 1) * w + x]) adj = true;
+        if (y < h - 1 && mask[(y + 1) * w + x]) adj = true;
+        if (!adj) continue;
+
+        // This pixel is on the border - include it for anti-alias processing
+        // Mark as 2 = border pixel
+        expandedMask[y * w + x] = 2;
+      }
+    }
+
+    state.selectionMask = expandedMask;
+    drawSelectionOverlay();
+    showLoading(false);
+
+    // Count selected pixels
+    let count = 0;
+    for (let i = 0; i < expandedMask.length; i++) {
+      if (expandedMask[i]) count++;
+    }
+    statusInfo.textContent = `${count} ピクセル選択`;
+  }, 10);
+}
+
+// ============================================================
+// Draw selection overlay (marching ants)
+// ============================================================
+let marchingAntsTimer = null;
+
+function clearOverlay() {
+  overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  if (marchingAntsTimer) {
+    cancelAnimationFrame(marchingAntsTimer);
+    marchingAntsTimer = null;
+  }
+}
+
+function drawSelectionOverlay() {
+  clearOverlay();
+  if (!state.selectionMask) return;
+
+  const w = state.imgWidth;
+  const h = state.imgHeight;
+  const mask = state.selectionMask;
+
+  // Draw semi-transparent fill for selected area
+  const imgData = overlayCtx.createImageData(w, h);
+  const od = imgData.data;
+  for (let i = 0; i < mask.length; i++) {
+    if (mask[i] === 1) {
+      od[i * 4] = 0;
+      od[i * 4 + 1] = 120;
+      od[i * 4 + 2] = 255;
+      od[i * 4 + 3] = 40;
+    } else if (mask[i] === 2) {
+      od[i * 4] = 255;
+      od[i * 4 + 1] = 165;
+      od[i * 4 + 2] = 0;
+      od[i * 4 + 3] = 60;
+    }
+  }
+  overlayCtx.putImageData(imgData, 0, 0);
+
+  // Marching ants border
+  function animateAnts() {
+    state.marchingAntsOffset = (state.marchingAntsOffset + 1) % 12;
+
+    overlayCtx.clearRect(0, 0, w, h);
+    overlayCtx.putImageData(imgData, 0, 0);
+
+    // Draw boundary
+    overlayCtx.save();
+    overlayCtx.beginPath();
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!mask[y * w + x]) continue;
+        // Check if edge pixel
+        const isEdge =
+          x === 0 || y === 0 || x === w - 1 || y === h - 1 ||
+          !mask[y * w + x - 1] || !mask[y * w + x + 1] ||
+          !mask[(y - 1) * w + x] || !mask[(y + 1) * w + x];
+
+        if (isEdge) {
+          overlayCtx.rect(x, y, 1, 1);
+        }
+      }
+    }
+
+    overlayCtx.setLineDash([4, 4]);
+    overlayCtx.lineDashOffset = state.marchingAntsOffset;
+    overlayCtx.strokeStyle = '#000';
+    overlayCtx.lineWidth = 1 / state.zoom;
+    overlayCtx.stroke();
+
+    overlayCtx.lineDashOffset = state.marchingAntsOffset + 4;
+    overlayCtx.strokeStyle = '#fff';
+    overlayCtx.stroke();
+    overlayCtx.restore();
+
+    marchingAntsTimer = requestAnimationFrame(animateAnts);
+  }
+
+  animateAnts();
+}
+
+// ============================================================
+// Make Transparent
+// ============================================================
+document.getElementById('btn-make-transparent').addEventListener('click', () => {
+  if (!state.imageData || !state.selectionMask) {
+    statusInfo.textContent = '先に領域を選択してください';
+    return;
+  }
+  showLoading(true);
+  setTimeout(() => {
+    makeTransparent();
+    showLoading(false);
+  }, 10);
+});
+
+function makeTransparent() {
+  const w = state.imgWidth;
+  const h = state.imgHeight;
+  const d = state.imageData.data;
+  const mask = state.selectionMask;
+  const bg = state.bgColor;
+
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue;
+
+    const pi = i * 4;
+    const r = d[pi];
+    const g = d[pi + 1];
+    const b = d[pi + 2];
+    const a = d[pi + 3];
+
+    if (a === 0) continue; // already transparent
+
+    // Calculate distance from background color (normalized 0-1)
+    const dr = r - bg[0];
+    const dg = g - bg[1];
+    const db = b - bg[2];
+    const maxDist = 255 * Math.sqrt(3);
+    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+    const normalizedDist = Math.min(dist / maxDist, 1.0);
+
+    if (mask[i] === 1) {
+      // Interior pixel: fully make transparent based on closeness to bg
+      // Pixels very close to bg → fully transparent
+      // Pixels far from bg → keep as-is (they might be line art inside)
+      const bgProximity = 1.0 - normalizedDist; // 1 = exact bg, 0 = far from bg
+      // Use a threshold to decide: if very close to bg, make transparent
+      // If far from bg, keep with reduced alpha
+      const newAlpha = Math.round(normalizedDist * a);
+
+      if (newAlpha < 1) {
+        d[pi] = 0;
+        d[pi + 1] = 0;
+        d[pi + 2] = 0;
+        d[pi + 3] = 0;
+      } else {
+        // Unpremultiply: remove background color contribution
+        // Original pixel = alpha * fg + (1-alpha) * bg
+        // We know the pixel value and bg, solve for fg
+        const alphaF = newAlpha / 255;
+        const origAlphaF = a / 255;
+
+        // The pixel was: displayed = fg * coverage + bg * (1 - coverage)
+        // coverage ≈ normalizedDist
+        const coverage = normalizedDist;
+        let newR, newG, newB;
+
+        if (coverage > 0.001) {
+          newR = Math.round(Math.min(255, Math.max(0, (r - bg[0] * (1 - coverage)) / coverage)));
+          newG = Math.round(Math.min(255, Math.max(0, (g - bg[1] * (1 - coverage)) / coverage)));
+          newB = Math.round(Math.min(255, Math.max(0, (b - bg[2] * (1 - coverage)) / coverage)));
+        } else {
+          newR = r;
+          newG = g;
+          newB = b;
+        }
+
+        d[pi] = newR;
+        d[pi + 1] = newG;
+        d[pi + 2] = newB;
+        d[pi + 3] = newAlpha;
+      }
+    } else if (mask[i] === 2) {
+      // Border pixel (anti-aliased edge)
+      // Same logic but we always process
+      const newAlpha = Math.round(normalizedDist * a);
+
+      if (newAlpha < 1) {
+        d[pi] = 0;
+        d[pi + 1] = 0;
+        d[pi + 2] = 0;
+        d[pi + 3] = 0;
+      } else {
+        const coverage = normalizedDist;
+        let newR, newG, newB;
+
+        if (coverage > 0.001) {
+          newR = Math.round(Math.min(255, Math.max(0, (r - bg[0] * (1 - coverage)) / coverage)));
+          newG = Math.round(Math.min(255, Math.max(0, (g - bg[1] * (1 - coverage)) / coverage)));
+          newB = Math.round(Math.min(255, Math.max(0, (b - bg[2] * (1 - coverage)) / coverage)));
+        } else {
+          newR = r;
+          newG = g;
+          newB = b;
+        }
+
+        d[pi] = newR;
+        d[pi + 1] = newG;
+        d[pi + 2] = newB;
+        d[pi + 3] = newAlpha;
+      }
+    }
+  }
+
+  // Update canvas
+  mainCtx.putImageData(state.imageData, 0, 0);
+
+  // Clear selection
+  state.selectionMask = null;
+  clearOverlay();
+  statusInfo.textContent = '透明化完了';
+}
+
+// ============================================================
+// Download
+// ============================================================
+document.getElementById('btn-download').addEventListener('click', () => {
+  if (!state.imageData) {
+    statusInfo.textContent = '画像がありません';
+    return;
+  }
+  mainCanvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'edited.png';
+    a.click();
+    URL.revokeObjectURL(url);
+    statusInfo.textContent = 'ダウンロード完了';
+  }, 'image/png');
+});
+
+// ============================================================
+// Utility
+// ============================================================
+function showLoading(show) {
+  loading.classList.toggle('visible', show);
+}
+
+// Initialize
+setTool('select');
+
+// Handle window resize
+window.addEventListener('resize', () => {
+  if (state.imgWidth) fitImageToView();
+});
+
+// Prevent context menu on canvas
+container.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'e' || e.key === 'E') setTool('eyedropper');
+  if (e.key === 's' || e.key === 'S') { if (!e.ctrlKey && !e.metaKey) setTool('select'); }
+  if (e.key === '0') fitImageToView();
+});
+</script>
+</body>
+</html>
