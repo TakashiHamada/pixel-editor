@@ -716,9 +716,9 @@ function makeTransparent() {
   }
 
   // ---- Pass 2: Defringe (B案) ----
-  // Scan all semi-transparent pixels near transparent areas
-  // Remove residual background color contamination
-  const DEFRINGE_PASSES = 2;
+  // Multiple passes, each more aggressive, to clean up residual bg color
+  // Uses 3x3 neighborhood analysis for better detection
+  const DEFRINGE_PASSES = 3;
   for (let pass = 0; pass < DEFRINGE_PASSES; pass++) {
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
@@ -726,40 +726,48 @@ function makeTransparent() {
         const pi = i * 4;
         const a = d[pi + 3];
 
-        // Only process semi-transparent pixels (not fully opaque, not fully transparent)
-        if (a === 0 || a === 255) continue;
-
-        // Check if adjacent to a transparent pixel
-        let hasTransparentNeighbor = false;
-        const neighbors = [
-          (y - 1) * w + x, (y + 1) * w + x,
-          y * w + (x - 1), y * w + (x + 1)
-        ];
-        for (const ni of neighbors) {
-          if (d[ni * 4 + 3] === 0) {
-            hasTransparentNeighbor = true;
-            break;
-          }
-        }
-        if (!hasTransparentNeighbor) continue;
+        if (a === 0) continue;
 
         const r = d[pi];
         const g = d[pi + 1];
         const b = d[pi + 2];
+        const dist = bgDistance(r, g, b);
+        const bgSim = 1.0 - dist; // how similar to bg (1=identical)
 
-        // Check how much bg color is "mixed in"
-        // If we assume the true foreground is the darkest nearby opaque pixel,
-        // we can estimate contamination
-        const alphaF = a / 255;
+        // Skip pixels that are clearly line color (far from bg)
+        if (bgSim < 0.15) continue;
 
-        // Simple approach: re-estimate assuming fg should have no bg component
-        // bg contamination = how close the color is to bg, weighted by transparency
-        const bgSim = 1.0 - bgDistance(r, g, b);
+        // Analyze 3x3 neighborhood: count transparent and low-alpha neighbors
+        let transparentCount = 0;
+        let lowAlphaSum = 0;
+        let neighborCount = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const ni = (y + dy) * w + (x + dx);
+            const na = d[ni * 4 + 3];
+            neighborCount++;
+            if (na === 0) transparentCount++;
+            lowAlphaSum += (255 - na);
+          }
+        }
 
-        if (bgSim > 0.1) {
-          // This pixel still has bg contamination - correct it
-          const correctedAlpha = Math.max(0, a - Math.round(bgSim * (255 - a) * 0.5));
-          if (correctedAlpha < 1) {
+        // The more transparent neighbors, the more aggressively we clean
+        const transparencyRatio = transparentCount / neighborCount;
+        const avgTransparency = lowAlphaSum / (neighborCount * 255);
+
+        // Skip if no transparent neighbors at all
+        if (transparentCount === 0 && avgTransparency < 0.1) continue;
+
+        // Aggressiveness: combination of bg similarity and surrounding transparency
+        const aggressiveness = bgSim * (0.3 + 0.7 * Math.max(transparencyRatio, avgTransparency));
+
+        if (aggressiveness > 0.08) {
+          // Recalculate alpha: remove bg contribution more aggressively
+          const alphaReduction = Math.round(aggressiveness * a * 0.6);
+          const correctedAlpha = Math.max(0, a - alphaReduction);
+
+          if (correctedAlpha < 2) {
             d[pi] = 0; d[pi+1] = 0; d[pi+2] = 0; d[pi+3] = 0;
           } else {
             const newAlphaF = correctedAlpha / 255;
@@ -768,6 +776,69 @@ function makeTransparent() {
             d[pi + 2] = unpremultiply(b, bg[2], newAlphaF);
             d[pi + 3] = correctedAlpha;
           }
+        }
+      }
+    }
+  }
+
+  // ---- Pass 3: Isolated pixel cleanup ----
+  // Catch remaining bright pixels in narrow gaps between lines
+  // These are pixels that are still notably brighter than their neighbors
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const pi = i * 4;
+      const a = d[pi + 3];
+
+      if (a === 0) continue;
+
+      const r = d[pi];
+      const g = d[pi + 1];
+      const b = d[pi + 2];
+      const bgSim = 1.0 - bgDistance(r, g, b);
+
+      // Only care about pixels still similar to bg
+      if (bgSim < 0.3) continue;
+
+      // Check if this pixel is brighter/more bg-like than ALL its opaque neighbors
+      // This catches "white spots" sitting between dark line pixels
+      let opaqueNeighborCount = 0;
+      let darkerNeighborCount = 0;
+      let totalNeighborBgSim = 0;
+
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const ni = (y + dy) * w + (x + dx);
+          const na = d[ni * 4 + 3];
+          if (na > 0) {
+            opaqueNeighborCount++;
+            const nDist = bgDistance(d[ni*4], d[ni*4+1], d[ni*4+2]);
+            const nBgSim = 1.0 - nDist;
+            totalNeighborBgSim += nBgSim;
+            if (nBgSim < bgSim - 0.1) darkerNeighborCount++;
+          }
+        }
+      }
+
+      if (opaqueNeighborCount === 0) continue;
+
+      const avgNeighborBgSim = totalNeighborBgSim / opaqueNeighborCount;
+
+      // If this pixel is significantly more bg-like than its neighbors → it's a remnant
+      if (bgSim - avgNeighborBgSim > 0.15 || darkerNeighborCount >= 3) {
+        const excess = bgSim - avgNeighborBgSim;
+        const reduction = Math.min(1.0, excess * 2 + 0.3) * bgSim;
+        const correctedAlpha = Math.max(0, Math.round(a * (1.0 - reduction)));
+
+        if (correctedAlpha < 2) {
+          d[pi] = 0; d[pi+1] = 0; d[pi+2] = 0; d[pi+3] = 0;
+        } else {
+          const newAlphaF = correctedAlpha / 255;
+          d[pi]     = unpremultiply(r, bg[0], newAlphaF);
+          d[pi + 1] = unpremultiply(g, bg[1], newAlphaF);
+          d[pi + 2] = unpremultiply(b, bg[2], newAlphaF);
+          d[pi + 3] = correctedAlpha;
         }
       }
     }
