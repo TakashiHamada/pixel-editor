@@ -111,7 +111,7 @@ PE.tools.transparency = {
         <div class="panel-section-title selectable" id="tool-eyedropper">
           <i class="fa-solid fa-eye-dropper"></i> Extract Background Color
         </div>
-        <div class="panel-row">
+        <div class="panel-row" id="tool-color-row">
           <span class="panel-label">Fill Color</span>
           <div class="color-preview" id="tool-color-preview"></div>
           <span class="color-hex" id="tool-color-hex">#FFFFFF</span>
@@ -202,6 +202,15 @@ PE.tools.transparency = {
     if (hexEl) hexEl.textContent = hex;
   },
 
+  _flashColorRow() {
+    const row = document.getElementById('tool-color-row');
+    if (!row) return;
+    row.classList.remove('flash');
+    // Force reflow to restart animation
+    void row.offsetWidth;
+    row.classList.add('flash');
+  },
+
   // ---- Eyedropper ----
   _pickColor(x, y) {
     const s = PE.state;
@@ -209,6 +218,7 @@ PE.tools.transparency = {
     const idx = (y * s.imgWidth + x) * 4;
     this.bgColor = [d[idx], d[idx + 1], d[idx + 2]];
     this._updateColorDisplay();
+    this._flashColorRow();
     const hex = '#' + this.bgColor.map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
     PE.log.info(`Picked color: ${hex}`);
     // Auto-switch to select mode after picking
