@@ -187,12 +187,22 @@ PE.overlay = {
   },
 };
 
-/* --- Loading spinner --- */
+/* --- Loading spinner (delayed to avoid flicker on fast operations) --- */
 PE.loading = {
+  _timer: null,
+  _DELAY: 200, // ms before spinner appears
+
   show() {
-    document.getElementById('loading').classList.add('visible');
+    if (this._timer) return;
+    this._timer = setTimeout(() => {
+      document.getElementById('loading').classList.add('visible');
+    }, this._DELAY);
   },
   hide() {
+    if (this._timer) {
+      clearTimeout(this._timer);
+      this._timer = null;
+    }
     document.getElementById('loading').classList.remove('visible');
   },
 };
