@@ -191,7 +191,9 @@ const state = {
   panX: 0,
   panY: 0,
   imageData: null,           // current ImageData
-  selectionMask: null,       // Uint8Array, 1=selected
+  selectionMask: null,       // Uint8Array, 1=selected, 2=border
+  borderDist: null,          // Float32Array, distance from selection edge
+  borderRadius: 4,           // border expansion radius
   imgWidth: 0,
   imgHeight: 0,
   isPanning: false,
@@ -478,27 +480,50 @@ function floodFillSelect(startX, startY) {
       }
     }
 
-    // Expand selection to include anti-aliased border pixels
-    // Find pixels adjacent to the selection that are between bg and line color
-    const expandedMask = new Uint8Array(mask);
+    // Expand selection border using distance field (A案: 境界拡張)
+    // Compute distance from selection edge for non-selected pixels
+    // Use BFS from the selection boundary outward, up to BORDER_RADIUS pixels
+    const BORDER_RADIUS = 4;
+    const expandedMask = new Uint8Array(mask);  // 0=none, 1=interior
+    const borderDist = new Float32Array(w * h); // distance from selection edge
+
+    // BFS queue: start from non-selected pixels adjacent to selected pixels
+    const queue = [];
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         if (mask[y * w + x]) continue;
-        // Check if adjacent to selection
         let adj = false;
         if (x > 0 && mask[y * w + x - 1]) adj = true;
         if (x < w - 1 && mask[y * w + x + 1]) adj = true;
         if (y > 0 && mask[(y - 1) * w + x]) adj = true;
         if (y < h - 1 && mask[(y + 1) * w + x]) adj = true;
         if (!adj) continue;
-
-        // This pixel is on the border - include it for anti-alias processing
-        // Mark as 2 = border pixel
         expandedMask[y * w + x] = 2;
+        borderDist[y * w + x] = 1;
+        queue.push([x, y, 1]);
+      }
+    }
+
+    // Expand outward layer by layer
+    let qi = 0;
+    while (qi < queue.length) {
+      const [cx, cy, dist] = queue[qi++];
+      if (dist >= BORDER_RADIUS) continue;
+      const nextDist = dist + 1;
+      const neighbors = [[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]];
+      for (const [nx, ny] of neighbors) {
+        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+        const ni = ny * w + nx;
+        if (expandedMask[ni]) continue; // already selected or border
+        expandedMask[ni] = 2;
+        borderDist[ni] = nextDist;
+        queue.push([nx, ny, nextDist]);
       }
     }
 
     state.selectionMask = expandedMask;
+    state.borderDist = borderDist;
+    state.borderRadius = BORDER_RADIUS;
     drawSelectionOverlay();
     showLoading(false);
 
@@ -535,6 +560,8 @@ function drawSelectionOverlay() {
   // Draw semi-transparent fill for selected area
   const imgData = overlayCtx.createImageData(w, h);
   const od = imgData.data;
+  const borderDist = state.borderDist;
+  const borderRadius = state.borderRadius;
   for (let i = 0; i < mask.length; i++) {
     if (mask[i] === 1) {
       od[i * 4] = 0;
@@ -542,10 +569,12 @@ function drawSelectionOverlay() {
       od[i * 4 + 2] = 255;
       od[i * 4 + 3] = 40;
     } else if (mask[i] === 2) {
+      // Fade the overlay based on distance from edge
+      const edgeFactor = 1.0 - ((borderDist[i] - 1) / borderRadius);
       od[i * 4] = 255;
       od[i * 4 + 1] = 165;
       od[i * 4 + 2] = 0;
-      od[i * 4 + 3] = 60;
+      od[i * 4 + 3] = Math.round(60 * edgeFactor);
     }
   }
   overlayCtx.putImageData(imgData, 0, 0);
@@ -613,8 +642,28 @@ function makeTransparent() {
   const h = state.imgHeight;
   const d = state.imageData.data;
   const mask = state.selectionMask;
+  const borderDist = state.borderDist;
+  const borderRadius = state.borderRadius;
   const bg = state.bgColor;
 
+  // Helper: color distance from bg (0-1 normalized)
+  function bgDistance(r, g, b) {
+    const dr = r - bg[0];
+    const dg = g - bg[1];
+    const db = b - bg[2];
+    return Math.sqrt(dr * dr + dg * dg + db * db) / (255 * Math.sqrt(3));
+  }
+
+  // Helper: unpremultiply - remove background color contribution
+  // Given: pixel = fg * alpha + bg * (1 - alpha), solve for fg
+  function unpremultiply(channel, bgChannel, alpha) {
+    if (alpha < 0.001) return 0;
+    return Math.round(Math.min(255, Math.max(0,
+      (channel - bgChannel * (1 - alpha)) / alpha
+    )));
+  }
+
+  // ---- Pass 1: Main transparency ----
   for (let i = 0; i < mask.length; i++) {
     if (!mask[i]) continue;
 
@@ -624,85 +673,102 @@ function makeTransparent() {
     const b = d[pi + 2];
     const a = d[pi + 3];
 
-    if (a === 0) continue; // already transparent
+    if (a === 0) continue;
 
-    // Calculate distance from background color (normalized 0-1)
-    const dr = r - bg[0];
-    const dg = g - bg[1];
-    const db = b - bg[2];
-    const maxDist = 255 * Math.sqrt(3);
-    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-    const normalizedDist = Math.min(dist / maxDist, 1.0);
+    const dist = bgDistance(r, g, b);
 
     if (mask[i] === 1) {
-      // Interior pixel: fully make transparent based on closeness to bg
-      // Pixels very close to bg → fully transparent
-      // Pixels far from bg → keep as-is (they might be line art inside)
-      const bgProximity = 1.0 - normalizedDist; // 1 = exact bg, 0 = far from bg
-      // Use a threshold to decide: if very close to bg, make transparent
-      // If far from bg, keep with reduced alpha
-      const newAlpha = Math.round(normalizedDist * a);
+      // Interior pixel: use color distance as alpha
+      const newAlpha = Math.round(dist * a);
 
       if (newAlpha < 1) {
-        d[pi] = 0;
-        d[pi + 1] = 0;
-        d[pi + 2] = 0;
-        d[pi + 3] = 0;
+        d[pi] = 0; d[pi+1] = 0; d[pi+2] = 0; d[pi+3] = 0;
       } else {
-        // Unpremultiply: remove background color contribution
-        // Original pixel = alpha * fg + (1-alpha) * bg
-        // We know the pixel value and bg, solve for fg
         const alphaF = newAlpha / 255;
-        const origAlphaF = a / 255;
-
-        // The pixel was: displayed = fg * coverage + bg * (1 - coverage)
-        // coverage ≈ normalizedDist
-        const coverage = normalizedDist;
-        let newR, newG, newB;
-
-        if (coverage > 0.001) {
-          newR = Math.round(Math.min(255, Math.max(0, (r - bg[0] * (1 - coverage)) / coverage)));
-          newG = Math.round(Math.min(255, Math.max(0, (g - bg[1] * (1 - coverage)) / coverage)));
-          newB = Math.round(Math.min(255, Math.max(0, (b - bg[2] * (1 - coverage)) / coverage)));
-        } else {
-          newR = r;
-          newG = g;
-          newB = b;
-        }
-
-        d[pi] = newR;
-        d[pi + 1] = newG;
-        d[pi + 2] = newB;
+        d[pi]     = unpremultiply(r, bg[0], alphaF);
+        d[pi + 1] = unpremultiply(g, bg[1], alphaF);
+        d[pi + 2] = unpremultiply(b, bg[2], alphaF);
         d[pi + 3] = newAlpha;
       }
     } else if (mask[i] === 2) {
-      // Border pixel (anti-aliased edge)
-      // Same logic but we always process
-      const newAlpha = Math.round(normalizedDist * a);
+      // Border pixel: blend based on distance from selection edge
+      // Closer to selection → more processing; farther → less
+      const edgeDist = borderDist[i]; // 1 to borderRadius
+      const edgeFactor = 1.0 - ((edgeDist - 1) / borderRadius); // 1.0 at edge, ~0 at far
+
+      // Only process if the pixel has some bg color component
+      const newAlpha = Math.round((1.0 - (1.0 - dist) * edgeFactor) * a);
 
       if (newAlpha < 1) {
-        d[pi] = 0;
-        d[pi + 1] = 0;
-        d[pi + 2] = 0;
-        d[pi + 3] = 0;
+        d[pi] = 0; d[pi+1] = 0; d[pi+2] = 0; d[pi+3] = 0;
       } else {
-        const coverage = normalizedDist;
-        let newR, newG, newB;
-
-        if (coverage > 0.001) {
-          newR = Math.round(Math.min(255, Math.max(0, (r - bg[0] * (1 - coverage)) / coverage)));
-          newG = Math.round(Math.min(255, Math.max(0, (g - bg[1] * (1 - coverage)) / coverage)));
-          newB = Math.round(Math.min(255, Math.max(0, (b - bg[2] * (1 - coverage)) / coverage)));
-        } else {
-          newR = r;
-          newG = g;
-          newB = b;
-        }
-
-        d[pi] = newR;
-        d[pi + 1] = newG;
-        d[pi + 2] = newB;
+        const alphaF = newAlpha / 255;
+        // Blend between original color and unpremultiplied color based on edgeFactor
+        const upR = unpremultiply(r, bg[0], dist > 0.001 ? dist : alphaF);
+        const upG = unpremultiply(g, bg[1], dist > 0.001 ? dist : alphaF);
+        const upB = unpremultiply(b, bg[2], dist > 0.001 ? dist : alphaF);
+        d[pi]     = Math.round(upR * edgeFactor + r * (1 - edgeFactor));
+        d[pi + 1] = Math.round(upG * edgeFactor + g * (1 - edgeFactor));
+        d[pi + 2] = Math.round(upB * edgeFactor + b * (1 - edgeFactor));
         d[pi + 3] = newAlpha;
+      }
+    }
+  }
+
+  // ---- Pass 2: Defringe (B案) ----
+  // Scan all semi-transparent pixels near transparent areas
+  // Remove residual background color contamination
+  const DEFRINGE_PASSES = 2;
+  for (let pass = 0; pass < DEFRINGE_PASSES; pass++) {
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = y * w + x;
+        const pi = i * 4;
+        const a = d[pi + 3];
+
+        // Only process semi-transparent pixels (not fully opaque, not fully transparent)
+        if (a === 0 || a === 255) continue;
+
+        // Check if adjacent to a transparent pixel
+        let hasTransparentNeighbor = false;
+        const neighbors = [
+          (y - 1) * w + x, (y + 1) * w + x,
+          y * w + (x - 1), y * w + (x + 1)
+        ];
+        for (const ni of neighbors) {
+          if (d[ni * 4 + 3] === 0) {
+            hasTransparentNeighbor = true;
+            break;
+          }
+        }
+        if (!hasTransparentNeighbor) continue;
+
+        const r = d[pi];
+        const g = d[pi + 1];
+        const b = d[pi + 2];
+
+        // Check how much bg color is "mixed in"
+        // If we assume the true foreground is the darkest nearby opaque pixel,
+        // we can estimate contamination
+        const alphaF = a / 255;
+
+        // Simple approach: re-estimate assuming fg should have no bg component
+        // bg contamination = how close the color is to bg, weighted by transparency
+        const bgSim = 1.0 - bgDistance(r, g, b);
+
+        if (bgSim > 0.1) {
+          // This pixel still has bg contamination - correct it
+          const correctedAlpha = Math.max(0, a - Math.round(bgSim * (255 - a) * 0.5));
+          if (correctedAlpha < 1) {
+            d[pi] = 0; d[pi+1] = 0; d[pi+2] = 0; d[pi+3] = 0;
+          } else {
+            const newAlphaF = correctedAlpha / 255;
+            d[pi]     = unpremultiply(r, bg[0], newAlphaF);
+            d[pi + 1] = unpremultiply(g, bg[1], newAlphaF);
+            d[pi + 2] = unpremultiply(b, bg[2], newAlphaF);
+            d[pi + 3] = correctedAlpha;
+          }
+        }
       }
     }
   }
@@ -712,6 +778,7 @@ function makeTransparent() {
 
   // Clear selection
   state.selectionMask = null;
+  state.borderDist = null;
   clearOverlay();
   statusInfo.textContent = '透明化完了';
 }
