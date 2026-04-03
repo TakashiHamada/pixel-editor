@@ -10,6 +10,7 @@ PE.file = {
    * Accepted formats: PNG (preserves transparency).
    */
   open() {
+    if (PE.state.imageData) return;
     const input = document.getElementById('file-input');
     input.click();
   },
@@ -33,6 +34,19 @@ PE.file = {
   /**
    * Format bytes to human-readable string.
    */
+  /**
+   * Update menu bar button states based on whether an image is loaded.
+   */
+  _updateButtons() {
+    const hasImage = !!PE.state.imageData;
+    const btnOpen = document.getElementById('btn-open');
+    const btnSave = document.getElementById('btn-save');
+    const btnClose = document.getElementById('btn-close');
+    if (btnOpen) btnOpen.disabled = hasImage;
+    if (btnSave) btnSave.disabled = !hasImage;
+    if (btnClose) btnClose.disabled = !hasImage;
+  },
+
   _formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -87,6 +101,7 @@ PE.file = {
     PE.overlay.clear();
     PE.zoom.fitToView();
     PE.file._updateImageInfo();
+    PE.file._updateButtons();
     PE.log.info(`Opened: ${name} (${img.width} x ${img.height})`);
     PE.file.updateDropGuide();
   },
@@ -215,6 +230,7 @@ PE.file = {
     s.fileType = '';
     s.fileSize = 0;
     PE.file._updateImageInfo();
+    PE.file._updateButtons();
     PE.log.info('Image closed');
     PE.file.updateDropGuide();
   },

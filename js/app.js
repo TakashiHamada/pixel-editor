@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
   PE.shortcuts.init();
   PE.log.init();
   PE.file.initDragDrop();
+  PE.file._updateButtons();
   PE.history.updateUI();
 
   // File input listener

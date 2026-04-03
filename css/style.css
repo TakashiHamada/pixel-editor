@@ -370,7 +370,7 @@ body {
   flex: 1;
   overflow: hidden;
   position: relative;
-  cursor: crosshair;
+  cursor: default;
   background: var(--canvas-bg);
 }
 
@@ -446,12 +446,8 @@ body {
 }
 
 /* Cursor styles */
-#canvas-container.cursor-crosshair {
-  cursor: crosshair;
-}
-#canvas-container.cursor-eyedropper {
-  cursor: pointer;
-}
+#canvas-container.cursor-crosshair { cursor: crosshair; }
+#canvas-container.cursor-eyedropper { cursor: pointer; }
 #canvas-container.cursor-pan { cursor: grab; }
 #canvas-container.cursor-pan:active { cursor: grabbing; }
 
