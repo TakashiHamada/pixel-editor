@@ -7,7 +7,7 @@ window.PE = window.PE || {};
 PE.file = {
   /**
    * Open an image file via file dialog.
-   * Accepted formats: PNG (preserves transparency).
+   * Accepts any browser-supported image format. Exports as PNG.
    */
   open() {
     if (PE.state.imageData) return;
@@ -27,14 +27,6 @@ PE.file = {
   },
 
   /**
-   * Load an Image object into the editor canvas.
-   * @param {HTMLImageElement} img
-   * @param {string} name - file name
-   */
-  /**
-   * Format bytes to human-readable string.
-   */
-  /**
    * Update menu bar button states based on whether an image is loaded.
    */
   _updateButtons() {
@@ -47,6 +39,11 @@ PE.file = {
     if (btnClose) btnClose.disabled = !hasImage;
   },
 
+  /**
+   * Format bytes to human-readable string.
+   * @param {number} bytes
+   * @returns {string}
+   */
   _formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -70,6 +67,12 @@ PE.file = {
     el.textContent = text;
   },
 
+  /**
+   * Load an Image object into the editor canvas.
+   * @param {HTMLImageElement} img
+   * @param {string} name - file name
+   * @param {object} [meta] - optional metadata ({ type, size })
+   */
   loadImage(img, name, meta) {
     const s = PE.state;
     const mainCanvas = PE.dom.mainCanvas;
@@ -129,7 +132,7 @@ PE.file = {
       const baseName = s.fileName.replace(/\.[^.]+$/, '');
       a.download = `${baseName}_edited.png`;
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       s.fileSize = blob.size;
       s.fileType = 'image/png';
       PE.file._updateImageInfo();
