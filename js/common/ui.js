@@ -107,7 +107,7 @@ PE.shortcuts = {
   },
 };
 
-/* --- Selection overlay (soft glow pulse) --- */
+/* --- Selection overlay (dark red pulsing fill) --- */
 PE.overlay = {
   _timer: null,
   _startTime: 0,
@@ -122,9 +122,9 @@ PE.overlay = {
   },
 
   /**
-   * Draw the selection overlay with a soft pulsing glow edge.
-   * Interior fill is a subtle tint; edges breathe gently.
-   * @param {Uint8Array} mask - selection mask
+   * Draw the selection overlay as a dark-red tinted region that pulses
+   * between 50% and 100% opacity. Border zone fades proportionally.
+   * @param {Uint8Array} mask - selection mask (1=interior, 2=border)
    * @param {Float32Array} borderDist - distance field for border pixels
    * @param {number} borderRadius - max border expansion radius
    */
@@ -136,89 +136,49 @@ PE.overlay = {
     const h = PE.state.imgHeight;
     const ctx = PE.dom.overlayCtx;
 
-    // Precompute: classify each pixel as interior fill, border zone, or edge
-    // Edge = selected pixel adjacent to a non-selected pixel
-    const EDGE = 1, INTERIOR = 2, BORDER = 3;
-    const classify = new Uint8Array(w * h);
+    // Dark red: rgb(139, 32, 32) — matches --accent
+    const R = 139, G = 32, B = 32;
+    const BASE_ALPHA = 100; // max alpha for interior at full pulse
 
+    // Precompute per-pixel alpha multiplier (0.0 - 1.0)
+    // Interior = 1.0, Border = fades from 1.0 to 0.0
+    const alphaMap = new Float32Array(w * h);
     for (let i = 0; i < mask.length; i++) {
-      if (!mask[i]) continue;
-      if (mask[i] === 2) {
-        classify[i] = BORDER;
-        continue;
+      if (mask[i] === 1) {
+        alphaMap[i] = 1.0;
+      } else if (mask[i] === 2 && borderRadius > 0) {
+        alphaMap[i] = 1.0 - ((borderDist[i] - 1) / borderRadius);
       }
-      // mask[i] === 1: check if edge
-      const x = i % w;
-      const y = (i - x) / w;
-      const isEdge =
-        x === 0 || y === 0 || x === w - 1 || y === h - 1 ||
-        !mask[i - 1] || !mask[i + 1] ||
-        !mask[i - w] || !mask[i + w];
-      classify[i] = isEdge ? EDGE : INTERIOR;
     }
 
-    // Build base overlay image (static parts)
-    const baseData = ctx.createImageData(w, h);
-    const bd = baseData.data;
-
-    for (let i = 0; i < classify.length; i++) {
-      const c = classify[i];
-      if (c === INTERIOR) {
-        // Subtle cool blue tint
-        bd[i * 4]     = 100;
-        bd[i * 4 + 1] = 160;
-        bd[i * 4 + 2] = 255;
-        bd[i * 4 + 3] = 25;
-      } else if (c === BORDER && borderRadius > 0) {
-        // Warm orange fade for feathered border
-        const edgeFactor = 1.0 - ((borderDist[i] - 1) / borderRadius);
-        bd[i * 4]     = 255;
-        bd[i * 4 + 1] = 170;
-        bd[i * 4 + 2] = 50;
-        bd[i * 4 + 3] = Math.round(40 * edgeFactor);
-      }
-      // EDGE pixels are drawn dynamically in the animation
+    // Collect selected pixel indices for fast per-frame updates
+    const selectedIndices = [];
+    for (let i = 0; i < mask.length; i++) {
+      if (mask[i]) selectedIndices.push(i);
     }
 
-    // Collect edge pixel indices for fast iteration
-    const edgeIndices = [];
-    for (let i = 0; i < classify.length; i++) {
-      if (classify[i] === EDGE) edgeIndices.push(i);
-    }
+    // Reusable ImageData for animation frames
+    const frameData = ctx.createImageData(w, h);
+    const fd = frameData.data;
 
-    // Smooth breathing animation
     this._startTime = performance.now();
     const self = this;
 
     function animate(now) {
-      // Slow sine wave: 2.5s period, gentle alpha range
-      const t = (now - self._startTime) / 2500;
-      const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
-      // Edge glow alpha: breathe between 40 and 110
-      const edgeAlpha = Math.round(40 + 70 * pulse);
-      // Edge color: soft cyan-white glow
-      const edgeR = Math.round(140 + 80 * pulse);
-      const edgeG = Math.round(200 + 40 * pulse);
-      const edgeB = 255;
+      // Slow sine wave: 2s period, pulse between 0.5 and 1.0
+      const t = (now - self._startTime) / 2000;
+      const pulse = 0.75 + 0.25 * Math.sin(t * Math.PI * 2);
 
-      // Copy base image and stamp edge pixels
-      const frameData = new ImageData(
-        new Uint8ClampedArray(baseData.data),
-        w, h
-      );
-      const fd = frameData.data;
-
-      for (let j = 0; j < edgeIndices.length; j++) {
-        const i = edgeIndices[j];
-        fd[i * 4]     = edgeR;
-        fd[i * 4 + 1] = edgeG;
-        fd[i * 4 + 2] = edgeB;
-        fd[i * 4 + 3] = edgeAlpha;
+      for (let j = 0; j < selectedIndices.length; j++) {
+        const i = selectedIndices[j];
+        const p = i * 4;
+        fd[p]     = R;
+        fd[p + 1] = G;
+        fd[p + 2] = B;
+        fd[p + 3] = Math.round(BASE_ALPHA * alphaMap[i] * pulse);
       }
 
-      ctx.clearRect(0, 0, w, h);
       ctx.putImageData(frameData, 0, 0);
-
       self._timer = requestAnimationFrame(animate);
     }
 
