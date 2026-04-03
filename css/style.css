@@ -435,10 +435,10 @@ body {
 
 /* Cursor styles */
 #canvas-container.cursor-crosshair {
-  cursor: url('../img/cursor-select.svg') 10 10, crosshair;
+  cursor: crosshair;
 }
 #canvas-container.cursor-eyedropper {
-  cursor: url('../img/cursor-eyedropper.svg') 2 30, crosshair;
+  cursor: pointer;
 }
 #canvas-container.cursor-pan { cursor: grab; }
 #canvas-container.cursor-pan:active { cursor: grabbing; }
