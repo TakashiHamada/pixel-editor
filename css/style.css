@@ -434,9 +434,11 @@ body {
 }
 
 /* Cursor styles */
-#canvas-container.cursor-crosshair { cursor: crosshair; }
+#canvas-container.cursor-crosshair {
+  cursor: url('../img/cursor-select.svg') 10 10, crosshair;
+}
 #canvas-container.cursor-eyedropper {
-  cursor: url('../img/cursor-eyedropper.svg') 3 26, crosshair;
+  cursor: url('../img/cursor-eyedropper.svg') 2 30, crosshair;
 }
 #canvas-container.cursor-pan { cursor: grab; }
 #canvas-container.cursor-pan:active { cursor: grabbing; }
