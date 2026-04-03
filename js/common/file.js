@@ -68,6 +68,7 @@ PE.file = {
     PE.overlay.clear();
     PE.zoom.fitToView();
     PE.log.info(`Opened: ${name} (${img.width} x ${img.height})`);
+    PE.file.updateDropGuide();
   },
 
   /**
@@ -96,6 +97,66 @@ PE.file = {
       URL.revokeObjectURL(url);
       PE.log.success('Saved: ' + a.download);
     }, 'image/png');
+  },
+
+  /**
+   * Load an image file from a File object (used by drag & drop).
+   * @param {File} file
+   */
+  loadFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => PE.file.loadImage(img, file.name);
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  },
+
+  /**
+   * Show or hide the drop guide based on whether an image is loaded.
+   */
+  updateDropGuide() {
+    const guide = document.getElementById('drop-guide');
+    if (guide) {
+      guide.classList.toggle('hidden', !!PE.state.imageData);
+    }
+  },
+
+  /**
+   * Initialize drag & drop on the canvas container.
+   */
+  initDragDrop() {
+    const container = PE.dom.container;
+    let dragCounter = 0;
+
+    container.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      container.classList.add('drag-over');
+    });
+
+    container.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        container.classList.remove('drag-over');
+      }
+    });
+
+    container.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+
+    container.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      container.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) PE.file.loadFile(file);
+    });
   },
 
   /**
@@ -128,5 +189,6 @@ PE.file = {
     PE.history.updateUI();
     PE.overlay.clear();
     PE.log.info('Image closed');
+    PE.file.updateDropGuide();
   },
 };

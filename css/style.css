@@ -381,6 +381,57 @@ body {
   pointer-events: none;
 }
 
+/* Drop guide (shown when no image loaded) */
+#drop-guide {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  color: var(--text-muted);
+  gap: 12px;
+}
+
+#drop-guide i {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+#drop-guide p {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+#drop-guide span {
+  font-size: 12px;
+}
+
+#drop-guide.hidden {
+  display: none;
+}
+
+/* Drag-over highlight */
+#canvas-container.drag-over {
+  background: var(--bg-medium);
+  outline: 2px dashed var(--accent-active);
+  outline-offset: -4px;
+}
+
+#canvas-container.drag-over #drop-guide {
+  color: var(--accent-active);
+}
+
+#canvas-container.drag-over #drop-guide i {
+  opacity: 1;
+}
+
+#canvas-container.drag-over #drop-guide p {
+  color: var(--accent-active);
+}
+
 /* Cursor styles */
 #canvas-container.cursor-crosshair { cursor: crosshair; }
 #canvas-container.cursor-eyedropper {
