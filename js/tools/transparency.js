@@ -72,6 +72,23 @@ PE.tools.transparency = {
    * @param {number} imgY - pixel Y coordinate
    * @param {MouseEvent} e - original mouse event
    */
+  /**
+   * Called on mouse move over canvas. Preview color under cursor in eyedropper mode.
+   */
+  onCanvasHover(imgX, imgY) {
+    if (this.subTool !== 'eyedropper') return;
+    const s = PE.state;
+    if (!s.imageData) return;
+    const d = s.imageData.data;
+    const idx = (imgY * s.imgWidth + imgX) * 4;
+    const r = d[idx], g = d[idx + 1], b = d[idx + 2];
+    const hex = '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const preview = document.getElementById('tool-color-preview');
+    const hexEl = document.getElementById('tool-color-hex');
+    if (preview) preview.style.background = hex;
+    if (hexEl) hexEl.textContent = hex;
+  },
+
   onCanvasClick(imgX, imgY, e) {
     if (this.subTool === 'eyedropper') {
       this._pickColor(imgX, imgY);

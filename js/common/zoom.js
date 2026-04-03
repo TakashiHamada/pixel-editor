@@ -130,12 +130,15 @@ PE.zoom = {
       const imgX = Math.floor((e.clientX - rect.left - s.panX) / s.zoom);
       const imgY = Math.floor((e.clientY - rect.top - s.panY) / s.zoom);
       const el = document.getElementById('cursor-pos');
+      const inBounds = imgX >= 0 && imgX < s.imgWidth && imgY >= 0 && imgY < s.imgHeight;
       if (el) {
-        if (imgX >= 0 && imgX < s.imgWidth && imgY >= 0 && imgY < s.imgHeight) {
-          el.textContent = `X: ${imgX}  Y: ${imgY}`;
-        } else {
-          el.textContent = '';
-        }
+        el.textContent = inBounds ? `X: ${imgX}  Y: ${imgY}` : '';
+      }
+
+      // Notify active tool of hover position
+      if (inBounds && s.activeTool && PE.toolRegistry[s.activeTool]) {
+        const tool = PE.toolRegistry[s.activeTool];
+        if (tool.onCanvasHover) tool.onCanvasHover(imgX, imgY);
       }
     });
 
