@@ -1,1002 +1,122 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Web Photo Editor</title>
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #2a2a2a;
-  color: #ddd;
-  overflow: hidden;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  user-select: none;
-}
-
-/* Toolbar */
-#toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #333;
-  border-bottom: 1px solid #444;
-  flex-wrap: wrap;
-}
-
-#toolbar button {
-  padding: 6px 14px;
-  border: 1px solid #555;
-  border-radius: 4px;
-  background: #444;
-  color: #ddd;
-  cursor: pointer;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-#toolbar button:hover:not(:disabled) { background: #555; }
-#toolbar button.active { background: #0078d4; border-color: #0078d4; color: #fff; }
-#toolbar button:disabled { opacity: 0.4; cursor: default; }
-
-.toolbar-separator {
-  width: 1px;
-  height: 24px;
-  background: #555;
-}
-
-.toolbar-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.toolbar-label {
-  font-size: 12px;
-  color: #aaa;
-}
-
-#toleranceSlider {
-  width: 100px;
-  accent-color: #0078d4;
-}
-
-#toleranceValue {
-  font-size: 12px;
-  min-width: 28px;
-  text-align: right;
-}
-
-#bgColorPreview {
-  width: 24px;
-  height: 24px;
-  border: 2px solid #666;
-  border-radius: 3px;
-  background: #fff;
-}
-
-#bgColorHex {
-  font-size: 12px;
-  font-family: monospace;
-}
-
-/* Canvas area */
-#canvas-container {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-  cursor: crosshair;
-  background: #4a4a4a;
-}
-
-#main-canvas, #overlay-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  image-rendering: pixelated;
-}
-
-#main-canvas {
-  background: none;
-}
-#main-canvas.has-image {
-  background:
-    repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0 / 16px 16px;
-}
-
-#overlay-canvas {
-  pointer-events: none;
-}
-
-/* Status bar */
-#statusbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 4px 12px;
-  background: #333;
-  border-top: 1px solid #444;
-  font-size: 12px;
-  color: #aaa;
-}
-
-/* Cursor styles */
-#canvas-container.tool-eyedropper { cursor: crosshair; }
-#canvas-container.tool-select { cursor: crosshair; }
-#canvas-container.tool-pan { cursor: grab; }
-#canvas-container.tool-pan:active { cursor: grabbing; }
-
-/* Loading overlay */
-#loading {
-  display: none;
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.6);
-  justify-content: center;
-  align-items: center;
-  z-index: 100;
-  font-size: 18px;
-  color: #fff;
-}
-#loading.visible { display: flex; }
-
-#build-info {
-  position: fixed;
-  top: 4px;
-  right: 8px;
-  font-size: 11px;
-  color: #666;
-  pointer-events: none;
-  z-index: 50;
-}
-</style>
+<title>Pixel Editor</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-<div id="toolbar">
-  <button id="btn-open" title="画像を開く">開く</button>
-  <div class="toolbar-separator"></div>
-  <button id="btn-eyedropper" title="スポイト: 塗り色を取得">スポイト</button>
-  <button id="btn-select" title="選択: 領域をクリックして選択">選択</button>
-  <div class="toolbar-separator"></div>
-  <button id="btn-make-transparent" title="選択領域を透明化">透明化</button>
-  <div class="toolbar-separator"></div>
-  <button id="btn-undo" title="元に戻す (Ctrl+Z)" disabled>戻す</button>
-  <div class="toolbar-separator"></div>
-  <button id="btn-download" title="PNGとしてダウンロード">ダウンロード</button>
-  <div class="toolbar-separator"></div>
-  <div class="toolbar-group">
-    <span class="toolbar-label">許容値:</span>
-    <input type="range" id="toleranceSlider" min="1" max="100" value="32">
-    <span id="toleranceValue">32</span>
+<!-- ============================================================
+     Top Menu Bar
+     ============================================================ -->
+<div id="menubar">
+  <!-- Left: File operations -->
+  <div id="menubar-left">
+    <button class="btn" id="btn-open" title="Open Image (Ctrl+O)">
+      <i class="fa-solid fa-folder-open"></i> Open
+    </button>
+    <button class="btn" id="btn-save" title="Save as PNG (Ctrl+S)">
+      <i class="fa-solid fa-floppy-disk"></i> Save
+    </button>
   </div>
-  <div class="toolbar-separator"></div>
-  <div class="toolbar-group">
-    <span class="toolbar-label">境界幅:</span>
-    <input type="range" id="borderRadiusSlider" min="0" max="10" value="4">
-    <span id="borderRadiusValue">4</span>
-  </div>
-  <div class="toolbar-separator"></div>
-  <div class="toolbar-group">
-    <span class="toolbar-label">塗り色:</span>
-    <div id="bgColorPreview"></div>
-    <span id="bgColorHex">#FFFFFF</span>
+
+  <!-- Center: Tool selection (populated by app.js) -->
+  <div id="menubar-center"></div>
+
+  <!-- Right: Info & Help -->
+  <div id="menubar-right">
+    <span id="commit-time"></span>
+    <button class="btn" id="btn-shortcuts" title="Keyboard Shortcuts (?)">
+      <i class="fa-solid fa-keyboard"></i>
+    </button>
   </div>
 </div>
 
-<div id="canvas-container">
-  <canvas id="main-canvas"></canvas>
-  <canvas id="overlay-canvas"></canvas>
+<!-- ============================================================
+     Main Area (Left Panel + Canvas)
+     ============================================================ -->
+<div id="main-area">
+  <!-- Left Panel: Tool options (shown/hidden by active tool) -->
+  <div id="left-panel"></div>
+
+  <!-- Canvas -->
+  <div id="canvas-container">
+    <canvas id="main-canvas"></canvas>
+    <canvas id="overlay-canvas"></canvas>
+  </div>
 </div>
 
+<!-- ============================================================
+     Bottom Status Bar
+     ============================================================ -->
 <div id="statusbar">
-  <span id="status-tool">ツール: -</span>
-  <span id="status-zoom">Zoom: 100%</span>
-  <span id="status-pos">X: - Y: -</span>
-  <span id="status-info"></span>
+  <div id="statusbar-left">
+    <span id="log-message"></span>
+  </div>
+  <div id="statusbar-right">
+    <span id="cursor-pos"></span>
+    <span id="zoom-level">100%</span>
+    <span id="undo-count">No history</span>
+  </div>
 </div>
 
-<div id="loading"><span>処理中...</span></div>
-<div id="build-info">Last commit: 2026-04-04 05:51 JST</div>
+<!-- ============================================================
+     Shortcuts Modal
+     ============================================================ -->
+<div id="shortcuts-modal">
+  <div class="modal-content">
+    <div class="modal-title">
+      <i class="fa-solid fa-keyboard"></i> Keyboard Shortcuts
+    </div>
+    <ul class="shortcut-list">
+      <li><span class="shortcut-desc">Open file</span> <span class="shortcut-key">Ctrl + O</span></li>
+      <li><span class="shortcut-desc">Save file</span> <span class="shortcut-key">Ctrl + S</span></li>
+      <li><span class="shortcut-desc">Undo</span> <span class="shortcut-key">Ctrl + Z</span></li>
+      <li><span class="shortcut-desc">Redo</span> <span class="shortcut-key">Ctrl + Shift + Z</span></li>
+      <li><span class="shortcut-desc">Zoom in</span> <span class="shortcut-key">Ctrl + =</span></li>
+      <li><span class="shortcut-desc">Zoom out</span> <span class="shortcut-key">Ctrl + -</span></li>
+      <li><span class="shortcut-desc">Zoom (mouse)</span> <span class="shortcut-key">Scroll wheel</span></li>
+      <li><span class="shortcut-desc">Fit to view</span> <span class="shortcut-key">0</span></li>
+      <li><span class="shortcut-desc">Pan</span> <span class="shortcut-key">Space + Drag</span></li>
+      <li><span class="shortcut-desc">Pan (mouse)</span> <span class="shortcut-key">Middle click + Drag</span></li>
+      <li><span class="shortcut-desc">Eyedropper mode</span> <span class="shortcut-key">E</span></li>
+      <li><span class="shortcut-desc">Select mode</span> <span class="shortcut-key">S</span></li>
+      <li><span class="shortcut-desc">Add to selection</span> <span class="shortcut-key">Shift + Click</span></li>
+      <li><span class="shortcut-desc">Make transparent</span> <span class="shortcut-key">Delete</span></li>
+      <li><span class="shortcut-desc">Show shortcuts</span> <span class="shortcut-key">?</span></li>
+    </ul>
+    <div class="modal-close">
+      <button class="btn" id="shortcuts-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     Loading Overlay
+     ============================================================ -->
+<div id="loading">
+  <i class="fa-solid fa-spinner"></i> Processing...
+</div>
+
+<!-- Build info -->
+<div id="build-info">Last commit: 2026-04-04 06:00 JST</div>
+
+<!-- Hidden file input -->
+<input type="file" id="file-input" accept="image/*" style="display:none">
+
+<!-- ============================================================
+     Scripts (order matters: state -> common -> tools -> app)
+     ============================================================ -->
+<script src="js/state.js"></script>
+<script src="js/common/ui.js"></script>
+<script src="js/common/file.js"></script>
+<script src="js/common/history.js"></script>
+<script src="js/common/zoom.js"></script>
+<script src="js/tools/transparency.js"></script>
+<script src="js/app.js"></script>
 
-<input type="file" id="file-input" accept=".png,image/png" style="display:none">
-
-<script>
-// ============================================================
-// State
-// ============================================================
-const state = {
-  tool: 'select',           // 'eyedropper' | 'select'
-  bgColor: [255, 255, 255], // picked background/fill color
-  tolerance: 32,
-  zoom: 1,
-  panX: 0,
-  panY: 0,
-  imageData: null,           // current ImageData
-  selectionMask: null,       // Uint8Array, 1=selected, 2=border
-  borderDist: null,          // Float32Array, distance from selection edge
-  borderRadius: 4,           // border expansion radius
-  imgWidth: 0,
-  imgHeight: 0,
-  isPanning: false,
-  panStartX: 0,
-  panStartY: 0,
-  panStartPanX: 0,
-  panStartPanY: 0,
-  marchingAntsOffset: 0,
-  undoStack: [],             // Array of ImageData snapshots (max 10)
-};
-
-const MAX_UNDO = 10;
-
-// ============================================================
-// DOM refs
-// ============================================================
-const container = document.getElementById('canvas-container');
-const mainCanvas = document.getElementById('main-canvas');
-const overlayCanvas = document.getElementById('overlay-canvas');
-const mainCtx = mainCanvas.getContext('2d', { willReadFrequently: true });
-const overlayCtx = overlayCanvas.getContext('2d');
-const fileInput = document.getElementById('file-input');
-const toleranceSlider = document.getElementById('toleranceSlider');
-const toleranceValue = document.getElementById('toleranceValue');
-const borderRadiusSlider = document.getElementById('borderRadiusSlider');
-const borderRadiusValue = document.getElementById('borderRadiusValue');
-const btnUndo = document.getElementById('btn-undo');
-const bgColorPreview = document.getElementById('bgColorPreview');
-const bgColorHex = document.getElementById('bgColorHex');
-const statusTool = document.getElementById('status-tool');
-const statusZoom = document.getElementById('status-zoom');
-const statusPos = document.getElementById('status-pos');
-const statusInfo = document.getElementById('status-info');
-const loading = document.getElementById('loading');
-
-// ============================================================
-// Tool buttons
-// ============================================================
-const toolButtons = {
-  eyedropper: document.getElementById('btn-eyedropper'),
-  select: document.getElementById('btn-select'),
-};
-
-function setTool(tool) {
-  state.tool = tool;
-  Object.entries(toolButtons).forEach(([k, btn]) => {
-    btn.classList.toggle('active', k === tool);
-  });
-  container.className = `tool-${tool}`;
-  statusTool.textContent = `ツール: ${tool === 'eyedropper' ? 'スポイト' : '選択'}`;
-}
-
-document.getElementById('btn-eyedropper').addEventListener('click', () => setTool('eyedropper'));
-document.getElementById('btn-select').addEventListener('click', () => setTool('select'));
-
-// ============================================================
-// Tolerance & Border Radius
-// ============================================================
-toleranceSlider.addEventListener('input', () => {
-  state.tolerance = parseInt(toleranceSlider.value);
-  toleranceValue.textContent = state.tolerance;
-});
-
-borderRadiusSlider.addEventListener('input', () => {
-  state.borderRadius = parseInt(borderRadiusSlider.value);
-  borderRadiusValue.textContent = state.borderRadius;
-});
-
-// ============================================================
-// Undo
-// ============================================================
-function pushUndo() {
-  // Save a copy of current imageData
-  const copy = new ImageData(
-    new Uint8ClampedArray(state.imageData.data),
-    state.imgWidth,
-    state.imgHeight
-  );
-  state.undoStack.push(copy);
-  if (state.undoStack.length > MAX_UNDO) {
-    state.undoStack.shift();
-  }
-  updateUndoButton();
-}
-
-function performUndo() {
-  if (state.undoStack.length === 0) return;
-  const prev = state.undoStack.pop();
-  state.imageData = prev;
-  mainCtx.putImageData(state.imageData, 0, 0);
-  state.selectionMask = null;
-  state.borderDist = null;
-  clearOverlay();
-  updateUndoButton();
-  statusInfo.textContent = `元に戻しました (残り${state.undoStack.length}回)`;
-}
-
-function updateUndoButton() {
-  btnUndo.disabled = state.undoStack.length === 0;
-  btnUndo.title = `元に戻す (Ctrl+Z) [${state.undoStack.length}/${MAX_UNDO}]`;
-}
-
-btnUndo.addEventListener('click', performUndo);
-
-// ============================================================
-// Open file
-// ============================================================
-document.getElementById('btn-open').addEventListener('click', () => fileInput.click());
-
-fileInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    const img = new Image();
-    img.onload = () => {
-      state.imgWidth = img.width;
-      state.imgHeight = img.height;
-      mainCanvas.width = img.width;
-      mainCanvas.height = img.height;
-      overlayCanvas.width = img.width;
-      overlayCanvas.height = img.height;
-      mainCtx.clearRect(0, 0, img.width, img.height);
-      mainCtx.drawImage(img, 0, 0);
-      mainCanvas.classList.add('has-image');
-      state.imageData = mainCtx.getImageData(0, 0, img.width, img.height);
-      state.selectionMask = null;
-      state.undoStack = [];
-      updateUndoButton();
-      clearOverlay();
-      fitImageToView();
-      statusInfo.textContent = `${img.width} x ${img.height}`;
-    };
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
-  fileInput.value = '';
-});
-
-// ============================================================
-// Zoom & Pan
-// ============================================================
-function fitImageToView() {
-  if (!state.imgWidth) return;
-  const rect = container.getBoundingClientRect();
-  const scaleX = (rect.width - 40) / state.imgWidth;
-  const scaleY = (rect.height - 40) / state.imgHeight;
-  state.zoom = Math.min(scaleX, scaleY, 4);
-  state.panX = (rect.width - state.imgWidth * state.zoom) / 2;
-  state.panY = (rect.height - state.imgHeight * state.zoom) / 2;
-  applyTransform();
-}
-
-function applyTransform() {
-  const t = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
-  mainCanvas.style.transform = t;
-  mainCanvas.style.transformOrigin = '0 0';
-  overlayCanvas.style.transform = t;
-  overlayCanvas.style.transformOrigin = '0 0';
-  statusZoom.textContent = `Zoom: ${Math.round(state.zoom * 100)}%`;
-}
-
-container.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  const rect = container.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
-
-  // image coords under cursor before zoom
-  const imgX = (mouseX - state.panX) / state.zoom;
-  const imgY = (mouseY - state.panY) / state.zoom;
-
-  const factor = e.deltaY < 0 ? 1.07 : 1 / 1.07;
-  state.zoom = Math.max(0.1, Math.min(64, state.zoom * factor));
-
-  // adjust pan so image point stays under cursor
-  state.panX = mouseX - imgX * state.zoom;
-  state.panY = mouseY - imgY * state.zoom;
-
-  applyTransform();
-}, { passive: false });
-
-// Pan with middle button or space+drag
-let spaceDown = false;
-document.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' && !e.repeat) {
-    spaceDown = true;
-    container.classList.add('tool-pan');
-  }
-});
-document.addEventListener('keyup', (e) => {
-  if (e.code === 'Space') {
-    spaceDown = false;
-    container.classList.remove('tool-pan');
-  }
-});
-
-container.addEventListener('mousedown', (e) => {
-  if (e.button === 1 || spaceDown) {
-    state.isPanning = true;
-    state.panStartX = e.clientX;
-    state.panStartY = e.clientY;
-    state.panStartPanX = state.panX;
-    state.panStartPanY = state.panY;
-    e.preventDefault();
-    return;
-  }
-});
-
-window.addEventListener('mousemove', (e) => {
-  if (state.isPanning) {
-    state.panX = state.panStartPanX + (e.clientX - state.panStartX);
-    state.panY = state.panStartPanY + (e.clientY - state.panStartY);
-    applyTransform();
-    return;
-  }
-
-  // Update position status
-  const rect = container.getBoundingClientRect();
-  const imgX = Math.floor((e.clientX - rect.left - state.panX) / state.zoom);
-  const imgY = Math.floor((e.clientY - rect.top - state.panY) / state.zoom);
-  if (imgX >= 0 && imgX < state.imgWidth && imgY >= 0 && imgY < state.imgHeight) {
-    statusPos.textContent = `X: ${imgX} Y: ${imgY}`;
-  } else {
-    statusPos.textContent = 'X: - Y: -';
-  }
-});
-
-window.addEventListener('mouseup', (e) => {
-  if (state.isPanning) {
-    state.isPanning = false;
-  }
-});
-
-// ============================================================
-// Canvas click (eyedropper / select)
-// ============================================================
-container.addEventListener('click', (e) => {
-  if (state.isPanning || e.button !== 0 || spaceDown) return;
-  if (!state.imageData) return;
-
-  const rect = container.getBoundingClientRect();
-  const imgX = Math.floor((e.clientX - rect.left - state.panX) / state.zoom);
-  const imgY = Math.floor((e.clientY - rect.top - state.panY) / state.zoom);
-
-  if (imgX < 0 || imgX >= state.imgWidth || imgY < 0 || imgY >= state.imgHeight) return;
-
-  if (state.tool === 'eyedropper') {
-    pickColor(imgX, imgY);
-  } else if (state.tool === 'select') {
-    floodFillSelect(imgX, imgY);
-  }
-});
-
-// ============================================================
-// Eyedropper
-// ============================================================
-function pickColor(x, y) {
-  const d = state.imageData.data;
-  const idx = (y * state.imgWidth + x) * 4;
-  state.bgColor = [d[idx], d[idx + 1], d[idx + 2]];
-  const hex = '#' + state.bgColor.map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
-  bgColorPreview.style.background = hex;
-  bgColorHex.textContent = hex;
-  statusInfo.textContent = `塗り色を取得: ${hex}`;
-}
-
-// ============================================================
-// Flood Fill Selection
-// ============================================================
-function floodFillSelect(startX, startY) {
-  showLoading(true);
-
-  // Use setTimeout to let UI update
-  setTimeout(() => {
-    const w = state.imgWidth;
-    const h = state.imgHeight;
-    const d = state.imageData.data;
-    const mask = new Uint8Array(w * h);
-    const tolerance = state.tolerance;
-
-    // Color at start point
-    const startIdx = (startY * w + startX) * 4;
-    const startR = d[startIdx];
-    const startG = d[startIdx + 1];
-    const startB = d[startIdx + 2];
-
-    function colorDistance(idx) {
-      const dr = d[idx] - startR;
-      const dg = d[idx + 1] - startG;
-      const db = d[idx + 2] - startB;
-      return Math.sqrt(dr * dr + dg * dg + db * db);
-    }
-
-    // Scanline flood fill
-    const stack = [[startX, startY]];
-    mask[startY * w + startX] = 1;
-
-    while (stack.length > 0) {
-      const [sx, sy] = stack.pop();
-      // scan left
-      let left = sx;
-      while (left > 0) {
-        const pi = (sy * w + (left - 1)) * 4;
-        if (mask[sy * w + (left - 1)] || colorDistance(pi) > tolerance) break;
-        left--;
-        mask[sy * w + left] = 1;
-      }
-      // scan right
-      let right = sx;
-      while (right < w - 1) {
-        const pi = (sy * w + (right + 1)) * 4;
-        if (mask[sy * w + (right + 1)] || colorDistance(pi) > tolerance) break;
-        right++;
-        mask[sy * w + right] = 1;
-      }
-      // check rows above and below
-      for (let x = left; x <= right; x++) {
-        if (sy > 0) {
-          const ni = ((sy - 1) * w + x);
-          if (!mask[ni] && colorDistance(ni * 4) <= tolerance) {
-            mask[ni] = 1;
-            stack.push([x, sy - 1]);
-          }
-        }
-        if (sy < h - 1) {
-          const ni = ((sy + 1) * w + x);
-          if (!mask[ni] && colorDistance(ni * 4) <= tolerance) {
-            mask[ni] = 1;
-            stack.push([x, sy + 1]);
-          }
-        }
-      }
-    }
-
-    // Expand selection border using distance field (A案: 境界拡張)
-    const BORDER_RADIUS = state.borderRadius;
-    let expandedMask;
-    let borderDist;
-
-    if (BORDER_RADIUS > 0) {
-      expandedMask = new Uint8Array(mask);  // 0=none, 1=interior
-      borderDist = new Float32Array(w * h); // distance from selection edge
-
-      // BFS queue: start from non-selected pixels adjacent to selected pixels
-      const queue = [];
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          if (mask[y * w + x]) continue;
-          let adj = false;
-          if (x > 0 && mask[y * w + x - 1]) adj = true;
-          if (x < w - 1 && mask[y * w + x + 1]) adj = true;
-          if (y > 0 && mask[(y - 1) * w + x]) adj = true;
-          if (y < h - 1 && mask[(y + 1) * w + x]) adj = true;
-          if (!adj) continue;
-          expandedMask[y * w + x] = 2;
-          borderDist[y * w + x] = 1;
-          queue.push([x, y, 1]);
-        }
-      }
-
-      // Expand outward layer by layer
-      let qi = 0;
-      while (qi < queue.length) {
-        const [cx, cy, dist] = queue[qi++];
-        if (dist >= BORDER_RADIUS) continue;
-        const nextDist = dist + 1;
-        const neighbors = [[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]];
-        for (const [nx, ny] of neighbors) {
-          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-          const ni = ny * w + nx;
-          if (expandedMask[ni]) continue;
-          expandedMask[ni] = 2;
-          borderDist[ni] = nextDist;
-          queue.push([nx, ny, nextDist]);
-        }
-      }
-    } else {
-      // No border expansion when radius is 0
-      expandedMask = new Uint8Array(mask);
-      borderDist = new Float32Array(w * h);
-    }
-
-    state.selectionMask = expandedMask;
-    state.borderDist = borderDist;
-    state.borderRadius = BORDER_RADIUS;
-    drawSelectionOverlay();
-    showLoading(false);
-
-    // Count selected pixels
-    let count = 0;
-    for (let i = 0; i < expandedMask.length; i++) {
-      if (expandedMask[i]) count++;
-    }
-    statusInfo.textContent = `${count} ピクセル選択`;
-  }, 10);
-}
-
-// ============================================================
-// Draw selection overlay (marching ants)
-// ============================================================
-let marchingAntsTimer = null;
-
-function clearOverlay() {
-  overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  if (marchingAntsTimer) {
-    cancelAnimationFrame(marchingAntsTimer);
-    marchingAntsTimer = null;
-  }
-}
-
-function drawSelectionOverlay() {
-  clearOverlay();
-  if (!state.selectionMask) return;
-
-  const w = state.imgWidth;
-  const h = state.imgHeight;
-  const mask = state.selectionMask;
-
-  // Draw semi-transparent fill for selected area
-  const imgData = overlayCtx.createImageData(w, h);
-  const od = imgData.data;
-  const borderDist = state.borderDist;
-  const borderRadius = state.borderRadius;
-  for (let i = 0; i < mask.length; i++) {
-    if (mask[i] === 1) {
-      od[i * 4] = 0;
-      od[i * 4 + 1] = 120;
-      od[i * 4 + 2] = 255;
-      od[i * 4 + 3] = 40;
-    } else if (mask[i] === 2 && borderRadius > 0) {
-      // Fade the overlay based on distance from edge
-      const edgeFactor = 1.0 - ((borderDist[i] - 1) / borderRadius);
-      od[i * 4] = 255;
-      od[i * 4 + 1] = 165;
-      od[i * 4 + 2] = 0;
-      od[i * 4 + 3] = Math.round(60 * edgeFactor);
-    }
-  }
-  overlayCtx.putImageData(imgData, 0, 0);
-
-  // Precompute edge pixels for marching ants (avoid per-frame full scan)
-  const edgePath = new Path2D();
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!mask[y * w + x]) continue;
-      const isEdge =
-        x === 0 || y === 0 || x === w - 1 || y === h - 1 ||
-        !mask[y * w + x - 1] || !mask[y * w + x + 1] ||
-        !mask[(y - 1) * w + x] || !mask[(y + 1) * w + x];
-      if (isEdge) {
-        edgePath.rect(x, y, 1, 1);
-      }
-    }
-  }
-
-  // Marching ants animation using cached edge path
-  function animateAnts() {
-    state.marchingAntsOffset = (state.marchingAntsOffset + 1) % 12;
-
-    overlayCtx.clearRect(0, 0, w, h);
-    overlayCtx.putImageData(imgData, 0, 0);
-
-    overlayCtx.save();
-    overlayCtx.setLineDash([4, 4]);
-    overlayCtx.lineDashOffset = state.marchingAntsOffset;
-    overlayCtx.strokeStyle = '#000';
-    overlayCtx.lineWidth = 1 / state.zoom;
-    overlayCtx.stroke(edgePath);
-
-    overlayCtx.lineDashOffset = state.marchingAntsOffset + 4;
-    overlayCtx.strokeStyle = '#fff';
-    overlayCtx.stroke(edgePath);
-    overlayCtx.restore();
-
-    marchingAntsTimer = requestAnimationFrame(animateAnts);
-  }
-
-  animateAnts();
-}
-
-// ============================================================
-// Make Transparent
-// ============================================================
-document.getElementById('btn-make-transparent').addEventListener('click', () => {
-  if (!state.imageData || !state.selectionMask) {
-    statusInfo.textContent = '先に領域を選択してください';
-    return;
-  }
-  showLoading(true);
-  setTimeout(() => {
-    pushUndo();
-    makeTransparent();
-    showLoading(false);
-  }, 10);
-});
-
-function makeTransparent() {
-  const w = state.imgWidth;
-  const h = state.imgHeight;
-  const d = state.imageData.data;
-  const mask = state.selectionMask;
-  const borderDist = state.borderDist;
-  const borderRadius = state.borderRadius;
-  const bg = state.bgColor;
-
-  // Helper: color distance from bg (0-1 normalized)
-  function bgDistance(r, g, b) {
-    const dr = r - bg[0];
-    const dg = g - bg[1];
-    const db = b - bg[2];
-    return Math.sqrt(dr * dr + dg * dg + db * db) / (255 * Math.sqrt(3));
-  }
-
-  // Helper: unpremultiply - remove background color contribution
-  // Given: pixel = fg * alpha + bg * (1 - alpha), solve for fg
-  function unpremultiply(channel, bgChannel, alpha) {
-    if (alpha < 0.001) return 0;
-    return Math.round(Math.min(255, Math.max(0,
-      (channel - bgChannel * (1 - alpha)) / alpha
-    )));
-  }
-
-  // ---- Pass 1: Main transparency ----
-  for (let i = 0; i < mask.length; i++) {
-    if (!mask[i]) continue;
-
-    const pi = i * 4;
-    const r = d[pi];
-    const g = d[pi + 1];
-    const b = d[pi + 2];
-    const a = d[pi + 3];
-
-    if (a === 0) continue;
-
-    const dist = bgDistance(r, g, b);
-
-    if (mask[i] === 1) {
-      // Interior pixel: use color distance as alpha
-      const newAlpha = Math.round(dist * a);
-
-      if (newAlpha < 1) {
-        d[pi] = 0; d[pi+1] = 0; d[pi+2] = 0; d[pi+3] = 0;
-      } else {
-        const alphaF = newAlpha / 255;
-        d[pi]     = unpremultiply(r, bg[0], alphaF);
-        d[pi + 1] = unpremultiply(g, bg[1], alphaF);
-        d[pi + 2] = unpremultiply(b, bg[2], alphaF);
-        d[pi + 3] = newAlpha;
-      }
-    } else if (mask[i] === 2 && borderRadius > 0) {
-      // Border pixel: blend based on distance from selection edge
-      const edgeDist = borderDist[i]; // 1 to borderRadius
-      const edgeFactor = 1.0 - ((edgeDist - 1) / borderRadius); // 1.0 at edge, ~0 at far
-
-      const newAlpha = Math.round((1.0 - (1.0 - dist) * edgeFactor) * a);
-
-      if (newAlpha < 1) {
-        d[pi] = 0; d[pi+1] = 0; d[pi+2] = 0; d[pi+3] = 0;
-      } else {
-        const alphaF = newAlpha / 255;
-        // Use actual alpha fraction for unpremultiply (not dist)
-        const upR = unpremultiply(r, bg[0], alphaF);
-        const upG = unpremultiply(g, bg[1], alphaF);
-        const upB = unpremultiply(b, bg[2], alphaF);
-        d[pi]     = Math.round(upR * edgeFactor + r * (1 - edgeFactor));
-        d[pi + 1] = Math.round(upG * edgeFactor + g * (1 - edgeFactor));
-        d[pi + 2] = Math.round(upB * edgeFactor + b * (1 - edgeFactor));
-        d[pi + 3] = newAlpha;
-      }
-    }
-  }
-
-  // ---- Pass 2: Defringe (B案) ----
-  // Multiple passes, each more aggressive, to clean up residual bg color
-  // Uses 3x3 neighborhood analysis for better detection
-  // ONLY operates within/near the selection mask
-  const DEFRINGE_PASSES = 3;
-  for (let pass = 0; pass < DEFRINGE_PASSES; pass++) {
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        const i = y * w + x;
-
-        // Only process pixels that were in the selection or border
-        if (!mask[i]) continue;
-
-        const pi = i * 4;
-        const a = d[pi + 3];
-
-        if (a === 0) continue;
-
-        const r = d[pi];
-        const g = d[pi + 1];
-        const b = d[pi + 2];
-        const dist = bgDistance(r, g, b);
-        const bgSim = 1.0 - dist; // how similar to bg (1=identical)
-
-        // Skip pixels that are clearly line color (far from bg)
-        if (bgSim < 0.15) continue;
-
-        // Analyze 3x3 neighborhood: count transparent and low-alpha neighbors
-        let transparentCount = 0;
-        let lowAlphaSum = 0;
-        let neighborCount = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const ni = (y + dy) * w + (x + dx);
-            const na = d[ni * 4 + 3];
-            neighborCount++;
-            if (na === 0) transparentCount++;
-            lowAlphaSum += (255 - na);
-          }
-        }
-
-        // The more transparent neighbors, the more aggressively we clean
-        const transparencyRatio = transparentCount / neighborCount;
-        const avgTransparency = lowAlphaSum / (neighborCount * 255);
-
-        // Skip if no transparent neighbors at all
-        if (transparentCount === 0 && avgTransparency < 0.1) continue;
-
-        // Aggressiveness: combination of bg similarity and surrounding transparency
-        const aggressiveness = bgSim * (0.3 + 0.7 * Math.max(transparencyRatio, avgTransparency));
-
-        if (aggressiveness > 0.08) {
-          // Recalculate alpha: remove bg contribution more aggressively
-          const alphaReduction = Math.round(aggressiveness * a * 0.6);
-          const correctedAlpha = Math.max(0, a - alphaReduction);
-
-          if (correctedAlpha < 2) {
-            d[pi] = 0; d[pi+1] = 0; d[pi+2] = 0; d[pi+3] = 0;
-          } else {
-            const newAlphaF = correctedAlpha / 255;
-            d[pi]     = unpremultiply(r, bg[0], newAlphaF);
-            d[pi + 1] = unpremultiply(g, bg[1], newAlphaF);
-            d[pi + 2] = unpremultiply(b, bg[2], newAlphaF);
-            d[pi + 3] = correctedAlpha;
-          }
-        }
-      }
-    }
-  }
-
-  // ---- Pass 3: Isolated pixel cleanup ----
-  // Catch remaining bright pixels in narrow gaps between lines
-  // ONLY operates within/near the selection mask
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const i = y * w + x;
-
-      // Only process pixels that were in the selection or border
-      if (!mask[i]) continue;
-
-      const pi = i * 4;
-      const a = d[pi + 3];
-
-      if (a === 0) continue;
-
-      const r = d[pi];
-      const g = d[pi + 1];
-      const b = d[pi + 2];
-      const bgSim = 1.0 - bgDistance(r, g, b);
-
-      // Only care about pixels still similar to bg
-      if (bgSim < 0.3) continue;
-
-      // Check if this pixel is brighter/more bg-like than ALL its opaque neighbors
-      // This catches "white spots" sitting between dark line pixels
-      let opaqueNeighborCount = 0;
-      let darkerNeighborCount = 0;
-      let totalNeighborBgSim = 0;
-
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const ni = (y + dy) * w + (x + dx);
-          const na = d[ni * 4 + 3];
-          if (na > 0) {
-            opaqueNeighborCount++;
-            const nDist = bgDistance(d[ni*4], d[ni*4+1], d[ni*4+2]);
-            const nBgSim = 1.0 - nDist;
-            totalNeighborBgSim += nBgSim;
-            if (nBgSim < bgSim - 0.1) darkerNeighborCount++;
-          }
-        }
-      }
-
-      if (opaqueNeighborCount === 0) continue;
-
-      const avgNeighborBgSim = totalNeighborBgSim / opaqueNeighborCount;
-
-      // If this pixel is significantly more bg-like than its neighbors → it's a remnant
-      if (bgSim - avgNeighborBgSim > 0.15 || darkerNeighborCount >= 3) {
-        const excess = bgSim - avgNeighborBgSim;
-        const reduction = Math.min(1.0, excess * 2 + 0.3) * bgSim;
-        const correctedAlpha = Math.max(0, Math.round(a * (1.0 - reduction)));
-
-        if (correctedAlpha < 2) {
-          d[pi] = 0; d[pi+1] = 0; d[pi+2] = 0; d[pi+3] = 0;
-        } else {
-          const newAlphaF = correctedAlpha / 255;
-          d[pi]     = unpremultiply(r, bg[0], newAlphaF);
-          d[pi + 1] = unpremultiply(g, bg[1], newAlphaF);
-          d[pi + 2] = unpremultiply(b, bg[2], newAlphaF);
-          d[pi + 3] = correctedAlpha;
-        }
-      }
-    }
-  }
-
-  // Update canvas
-  mainCtx.putImageData(state.imageData, 0, 0);
-
-  // Clear selection
-  state.selectionMask = null;
-  state.borderDist = null;
-  clearOverlay();
-  statusInfo.textContent = '透明化完了';
-}
-
-// ============================================================
-// Download
-// ============================================================
-document.getElementById('btn-download').addEventListener('click', () => {
-  if (!state.imageData) {
-    statusInfo.textContent = '画像がありません';
-    return;
-  }
-  mainCanvas.toBlob((blob) => {
-    if (!blob) {
-      statusInfo.textContent = 'ダウンロードに失敗しました';
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'edited.png';
-    a.click();
-    URL.revokeObjectURL(url);
-    statusInfo.textContent = 'ダウンロード完了';
-  }, 'image/png');
-});
-
-// ============================================================
-// Utility
-// ============================================================
-function showLoading(show) {
-  loading.classList.toggle('visible', show);
-}
-
-// Initialize
-setTool('select');
-
-// Handle window resize
-window.addEventListener('resize', () => {
-  if (state.imgWidth) fitImageToView();
-});
-
-// Prevent context menu on canvas
-container.addEventListener('contextmenu', (e) => e.preventDefault());
-
-// Keyboard shortcuts
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'e' || e.key === 'E') setTool('eyedropper');
-  if (e.key === 's' || e.key === 'S') { if (!e.ctrlKey && !e.metaKey) setTool('select'); }
-  if (e.key === '0') fitImageToView();
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-    e.preventDefault();
-    performUndo();
-  }
-  if (e.key === 'Delete' || e.key === 'Backspace') {
-    e.preventDefault();
-    document.getElementById('btn-make-transparent').click();
-  }
-});
-</script>
 </body>
 </html>

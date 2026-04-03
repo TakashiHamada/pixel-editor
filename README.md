@@ -1,48 +1,231 @@
-# Web Photo Editor
+# Pixel Editor
 
-線画PNG画像の背景を透明化するシンプルなWebアプリです。GitHub Pagesで動作します。
+A lightweight, browser-based image editor designed for quick pixel-level edits during game development. Built as a single-page application with no build tools required.
 
-## 主な機能
+## Quick Start
 
-- **PNG読み込み** - 透明情報を含むPNGファイルに対応
-- **スポイト** - クリックで塗り色（背景色）を取得
-- **領域選択** - フラッドフィルで線に囲まれた領域を選択
-- **透明化** - 選択範囲をきれいに透明化（アンチエイリアス境界のデフリンジ処理付き）
-- **Undo** - 最大10ステップまで元に戻せる（Ctrl+Z）
-- **ズーム / パン** - スクロールでズーム、スペース+ドラッグでパン
-- **PNGダウンロード** - 編集結果を透明PNGとして保存
+Open `index.html` in any modern browser (Chrome, Firefox, Edge, Safari). If loading from `file://` causes CORS issues with scripts, use any local HTTP server:
 
-## 使い方
+```bash
+# Python
+python3 -m http.server 8000
 
-1. **「開く」** で PNG画像を読み込む
-2. **「スポイト」(E)** で透明にしたい色をクリックして取得
-3. **「選択」(S)** で透明にしたい領域をクリック
-4. **「透明化」(Delete)** で選択範囲を透明化
-5. **「ダウンロード」** で結果をPNGとして保存
+# Node.js
+npx serve .
 
-## キーボードショートカット
+# PHP
+php -S localhost:8000
+```
 
-| キー | 操作 |
-|------|------|
-| `E` | スポイトツール |
-| `S` | 選択ツール |
-| `Delete` / `Backspace` | 透明化実行 |
-| `Ctrl+Z` / `Cmd+Z` | 元に戻す |
-| `Space` + ドラッグ | パン |
-| `0` | 画面にフィット |
-| スクロール | ズーム / ズームアウト |
+## Features
 
-## 調整パラメータ
+### Common Features
+- **Open / Save** - Load images and save as PNG (preserves transparency)
+- **Undo / Redo** - Up to 20 levels of history (`Ctrl+Z` / `Ctrl+Shift+Z`)
+- **Zoom** - Mouse wheel or `Ctrl+=`/`Ctrl+-`, fit to view with `0`
+- **Pan** - `Space + Drag` or middle mouse button
+- **Keyboard Shortcuts** - Press `?` to view all shortcuts
+- **Status Bar** - Log messages, zoom level, undo/redo count, cursor position
 
-- **許容値** (1〜100) - フラッドフィル選択の色の許容範囲
-- **境界幅** (0〜10) - 透明化時のアンチエイリアス境界処理の範囲
+### Transparency Tool
+Remove background colors from sprites and game assets:
 
-## 技術構成
+1. **Extract** - Use the eyedropper (`E`) to pick the background color
+2. **Select** - Click to flood-fill select a region (`S`). Hold `Shift` to add to selection
+3. **Make Transparent** - Apply transparency removal (`Delete`)
 
-- 単一のHTMLファイル（HTML + CSS + JS）
-- 外部依存なし
-- Canvas APIによるピクセル操作
+Adjustable parameters:
+- **Tolerance** (1-100): How similar a pixel color must be to be included in selection
+- **Border Width** (0-10): Feathered edge expansion around selected area
 
-## 開発ルール
+## Architecture
 
-- コミットのたびに `index.html` 内の `#build-info` のタイムスタンプを日本時間(JST)で更新すること。詳細は `CLAUDE.md` を参照。
+```
+pixel-editor/
+├── index.html              # Main HTML (layout, modals, script loading)
+├── css/
+│   └── style.css           # All styles (dark red Photoshop-like theme)
+├── js/
+│   ├── state.js            # Global state object (PE.state)
+│   ├── app.js              # Main init, tool registry, keyboard shortcuts
+│   ├── common/
+│   │   ├── file.js         # File open/save operations
+│   │   ├── history.js      # Undo/redo stack management
+│   │   ├── zoom.js         # Zoom, pan, viewport controls
+│   │   └── ui.js           # Log, loading overlay, shortcuts modal, selection overlay
+│   └── tools/
+│       └── transparency.js # Transparency removal tool
+├── CLAUDE.md               # AI development guide
+└── README.md               # This file
+```
+
+## Adding a New Tool
+
+Tools are self-contained modules registered via `PE.registerTool()`. To add a new tool:
+
+### 1. Create the tool file
+
+Create `js/tools/my-tool.js`:
+
+```javascript
+window.PE = window.PE || {};
+PE.tools = PE.tools || {};
+
+PE.tools.myTool = {
+  // Required properties
+  id: 'my-tool',           // Unique identifier
+  label: 'My Tool',        // Display name in menu bar
+  icon: 'fa-magic',        // Font Awesome icon class
+
+  // Called when tool is activated via menu bar
+  activate() {
+    const panel = document.getElementById('left-panel');
+    panel.innerHTML = '<div class="panel-section">...</div>';
+    panel.classList.add('visible');
+    // Bind panel events...
+  },
+
+  // Called when switching to another tool
+  deactivate() {
+    const panel = document.getElementById('left-panel');
+    panel.classList.remove('visible');
+    panel.innerHTML = '';
+  },
+
+  // Called when user clicks on the canvas
+  onCanvasClick(imgX, imgY, event) {
+    // imgX, imgY = pixel coordinates in the image
+    // event = original MouseEvent (check event.shiftKey, etc.)
+  },
+};
+```
+
+### 2. Add the script tag
+
+In `index.html`, add before `app.js`:
+
+```html
+<script src="js/tools/my-tool.js"></script>
+```
+
+### 3. Register the tool
+
+In `js/app.js`, inside the `DOMContentLoaded` handler, add:
+
+```javascript
+PE.registerTool(PE.tools.myTool);
+```
+
+The tool will automatically appear in the menu bar center section.
+
+## Global Namespace
+
+All code lives under the `window.PE` namespace:
+
+| Path | Description |
+|------|-------------|
+| `PE.state` | Global application state (image data, zoom, history, etc.) |
+| `PE.dom` | Cached DOM element references |
+| `PE.file` | File open/save operations |
+| `PE.history` | Undo/redo management |
+| `PE.zoom` | Zoom/pan controls |
+| `PE.log` | Logging system (`info`, `success`, `warn`, `error`) |
+| `PE.overlay` | Selection overlay drawing (marching ants) |
+| `PE.loading` | Loading spinner show/hide |
+| `PE.shortcuts` | Shortcuts modal |
+| `PE.tools.*` | Individual tool implementations |
+| `PE.toolRegistry` | Map of registered tools |
+| `PE.registerTool()` | Register a new tool |
+| `PE.activateTool()` | Activate a tool by ID |
+
+## Accessing Image Data
+
+```javascript
+const s = PE.state;
+
+// Image dimensions
+s.imgWidth, s.imgHeight
+
+// Raw pixel data (Uint8ClampedArray, RGBA format)
+s.imageData.data
+
+// Get pixel color at (x, y)
+const idx = (y * s.imgWidth + x) * 4;
+const r = s.imageData.data[idx];
+const g = s.imageData.data[idx + 1];
+const b = s.imageData.data[idx + 2];
+const a = s.imageData.data[idx + 3];
+
+// After modifying imageData, update the canvas:
+PE.dom.mainCtx.putImageData(s.imageData, 0, 0);
+```
+
+## UI Components for Tool Panels
+
+Use these CSS classes when building tool panels:
+
+```html
+<div class="panel-section">
+  <div class="panel-section-title">
+    <i class="fa-solid fa-icon"></i> Section Title
+  </div>
+  <div class="panel-row">
+    <span class="panel-label">Label</span>
+    <input type="range" class="panel-slider" min="0" max="100" value="50">
+    <span class="panel-slider-value">50</span>
+  </div>
+  <div class="panel-row">
+    <button class="btn-panel">Normal Button</button>
+  </div>
+  <div class="panel-row">
+    <button class="btn-panel btn-action">Primary Action</button>
+  </div>
+</div>
+```
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+O` | Open file |
+| `Ctrl+S` | Save file |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Shift+Z` | Redo |
+| `Ctrl+=` | Zoom in |
+| `Ctrl+-` | Zoom out |
+| `Scroll` | Zoom at cursor |
+| `0` | Fit to view |
+| `Space+Drag` | Pan |
+| `E` | Eyedropper mode |
+| `S` | Select mode |
+| `Shift+Click` | Add to selection |
+| `Delete` | Make transparent |
+| `?` | Show shortcuts |
+
+## Theme
+
+The editor uses a dark red theme inspired by Adobe Photoshop. Theme colors are defined as CSS custom properties in `css/style.css` under `:root`. Key variables:
+
+- `--accent`: Primary accent color (dark red `#8b2020`)
+- `--accent-hover`: Hover state
+- `--accent-active`: Active/pressed state
+- `--bg-darkest` to `--bg-lighter`: Background gradient levels
+- `--text-primary`, `--text-secondary`, `--text-muted`: Text colors
+
+## Dependencies
+
+- [Font Awesome 6.5](https://fontawesome.com/) (loaded via CDN) - icons
+- No other external dependencies
+- No build tools required
+
+## Browser Support
+
+Modern browsers with Canvas API and ES6+ support:
+- Chrome 80+
+- Firefox 78+
+- Edge 80+
+- Safari 14+
+
+## Development Rules
+
+- Before each commit, update the `#build-info` timestamp in `index.html` to JST. See `CLAUDE.md` for details.
