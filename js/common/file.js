@@ -21,16 +21,7 @@ PE.file = {
   handleFileSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const img = new Image();
-      img.onload = () => {
-        PE.file.loadImage(img, file.name);
-      };
-      img.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
+    PE.file.loadFile(file);
     e.target.value = '';
   },
 
@@ -39,7 +30,33 @@ PE.file = {
    * @param {HTMLImageElement} img
    * @param {string} name - file name
    */
-  loadImage(img, name) {
+  /**
+   * Format bytes to human-readable string.
+   */
+  _formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  },
+
+  /**
+   * Update the image info display in the status bar.
+   */
+  _updateImageInfo() {
+    const el = document.getElementById('image-info');
+    if (!el) return;
+    const s = PE.state;
+    if (!s.imageData) {
+      el.textContent = '';
+      return;
+    }
+    let text = `${s.imgWidth} x ${s.imgHeight}`;
+    if (s.fileType) text += ` | ${s.fileType}`;
+    if (s.fileSize) text += ` | ${PE.file._formatSize(s.fileSize)}`;
+    el.textContent = text;
+  },
+
+  loadImage(img, name, meta) {
     const s = PE.state;
     const mainCanvas = PE.dom.mainCanvas;
     const overlayCanvas = PE.dom.overlayCanvas;
@@ -48,6 +65,8 @@ PE.file = {
     s.imgWidth = img.width;
     s.imgHeight = img.height;
     s.fileName = name || 'image.png';
+    s.fileType = meta && meta.type ? meta.type : '';
+    s.fileSize = meta && meta.size ? meta.size : 0;
 
     mainCanvas.width = img.width;
     mainCanvas.height = img.height;
@@ -67,6 +86,7 @@ PE.file = {
     PE.history.updateUI();
     PE.overlay.clear();
     PE.zoom.fitToView();
+    PE.file._updateImageInfo();
     PE.log.info(`Opened: ${name} (${img.width} x ${img.height})`);
     PE.file.updateDropGuide();
   },
@@ -95,7 +115,10 @@ PE.file = {
       a.download = `${baseName}_edited.png`;
       a.click();
       URL.revokeObjectURL(url);
-      PE.log.success('Saved: ' + a.download);
+      s.fileSize = blob.size;
+      s.fileType = 'image/png';
+      PE.file._updateImageInfo();
+      PE.log.success(`Downloaded: ${a.download} (${PE.file._formatSize(blob.size)})`);
     }, 'image/png');
   },
 
@@ -105,10 +128,11 @@ PE.file = {
    */
   loadFile(file) {
     if (!file || !file.type.startsWith('image/')) return;
+    const meta = { type: file.type, size: file.size };
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
-      img.onload = () => PE.file.loadImage(img, file.name);
+      img.onload = () => PE.file.loadImage(img, file.name, meta);
       img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
@@ -188,6 +212,9 @@ PE.file = {
 
     PE.history.updateUI();
     PE.overlay.clear();
+    s.fileType = '';
+    s.fileSize = 0;
+    PE.file._updateImageInfo();
     PE.log.info('Image closed');
     PE.file.updateDropGuide();
   },
