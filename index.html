@@ -202,7 +202,7 @@ body {
 </div>
 
 <div id="loading"><span>処理中...</span></div>
-<div id="build-info">Last commit: 2026-04-04 05:21 JST</div>
+<div id="build-info">Last commit: 2026-04-04 05:51 JST</div>
 
 <input type="file" id="file-input" accept=".png,image/png" style="display:none">
 
@@ -501,7 +501,6 @@ function floodFillSelect(startX, startY) {
     const d = state.imageData.data;
     const mask = new Uint8Array(w * h);
     const tolerance = state.tolerance;
-    const bg = state.bgColor;
 
     // Color at start point
     const startIdx = (startY * w + startX) * 4;
@@ -558,44 +557,51 @@ function floodFillSelect(startX, startY) {
     }
 
     // Expand selection border using distance field (A案: 境界拡張)
-    // Compute distance from selection edge for non-selected pixels
-    // Use BFS from the selection boundary outward, up to BORDER_RADIUS pixels
     const BORDER_RADIUS = state.borderRadius;
-    const expandedMask = new Uint8Array(mask);  // 0=none, 1=interior
-    const borderDist = new Float32Array(w * h); // distance from selection edge
+    let expandedMask;
+    let borderDist;
 
-    // BFS queue: start from non-selected pixels adjacent to selected pixels
-    const queue = [];
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (mask[y * w + x]) continue;
-        let adj = false;
-        if (x > 0 && mask[y * w + x - 1]) adj = true;
-        if (x < w - 1 && mask[y * w + x + 1]) adj = true;
-        if (y > 0 && mask[(y - 1) * w + x]) adj = true;
-        if (y < h - 1 && mask[(y + 1) * w + x]) adj = true;
-        if (!adj) continue;
-        expandedMask[y * w + x] = 2;
-        borderDist[y * w + x] = 1;
-        queue.push([x, y, 1]);
-      }
-    }
+    if (BORDER_RADIUS > 0) {
+      expandedMask = new Uint8Array(mask);  // 0=none, 1=interior
+      borderDist = new Float32Array(w * h); // distance from selection edge
 
-    // Expand outward layer by layer
-    let qi = 0;
-    while (qi < queue.length) {
-      const [cx, cy, dist] = queue[qi++];
-      if (dist >= BORDER_RADIUS) continue;
-      const nextDist = dist + 1;
-      const neighbors = [[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]];
-      for (const [nx, ny] of neighbors) {
-        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-        const ni = ny * w + nx;
-        if (expandedMask[ni]) continue; // already selected or border
-        expandedMask[ni] = 2;
-        borderDist[ni] = nextDist;
-        queue.push([nx, ny, nextDist]);
+      // BFS queue: start from non-selected pixels adjacent to selected pixels
+      const queue = [];
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (mask[y * w + x]) continue;
+          let adj = false;
+          if (x > 0 && mask[y * w + x - 1]) adj = true;
+          if (x < w - 1 && mask[y * w + x + 1]) adj = true;
+          if (y > 0 && mask[(y - 1) * w + x]) adj = true;
+          if (y < h - 1 && mask[(y + 1) * w + x]) adj = true;
+          if (!adj) continue;
+          expandedMask[y * w + x] = 2;
+          borderDist[y * w + x] = 1;
+          queue.push([x, y, 1]);
+        }
       }
+
+      // Expand outward layer by layer
+      let qi = 0;
+      while (qi < queue.length) {
+        const [cx, cy, dist] = queue[qi++];
+        if (dist >= BORDER_RADIUS) continue;
+        const nextDist = dist + 1;
+        const neighbors = [[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]];
+        for (const [nx, ny] of neighbors) {
+          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+          const ni = ny * w + nx;
+          if (expandedMask[ni]) continue;
+          expandedMask[ni] = 2;
+          borderDist[ni] = nextDist;
+          queue.push([nx, ny, nextDist]);
+        }
+      }
+    } else {
+      // No border expansion when radius is 0
+      expandedMask = new Uint8Array(mask);
+      borderDist = new Float32Array(w * h);
     }
 
     state.selectionMask = expandedMask;
@@ -645,7 +651,7 @@ function drawSelectionOverlay() {
       od[i * 4 + 1] = 120;
       od[i * 4 + 2] = 255;
       od[i * 4 + 3] = 40;
-    } else if (mask[i] === 2) {
+    } else if (mask[i] === 2 && borderRadius > 0) {
       // Fade the overlay based on distance from edge
       const edgeFactor = 1.0 - ((borderDist[i] - 1) / borderRadius);
       od[i * 4] = 255;
@@ -656,41 +662,38 @@ function drawSelectionOverlay() {
   }
   overlayCtx.putImageData(imgData, 0, 0);
 
-  // Marching ants border
+  // Precompute edge pixels for marching ants (avoid per-frame full scan)
+  const edgePath = new Path2D();
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y * w + x]) continue;
+      const isEdge =
+        x === 0 || y === 0 || x === w - 1 || y === h - 1 ||
+        !mask[y * w + x - 1] || !mask[y * w + x + 1] ||
+        !mask[(y - 1) * w + x] || !mask[(y + 1) * w + x];
+      if (isEdge) {
+        edgePath.rect(x, y, 1, 1);
+      }
+    }
+  }
+
+  // Marching ants animation using cached edge path
   function animateAnts() {
     state.marchingAntsOffset = (state.marchingAntsOffset + 1) % 12;
 
     overlayCtx.clearRect(0, 0, w, h);
     overlayCtx.putImageData(imgData, 0, 0);
 
-    // Draw boundary
     overlayCtx.save();
-    overlayCtx.beginPath();
-
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (!mask[y * w + x]) continue;
-        // Check if edge pixel
-        const isEdge =
-          x === 0 || y === 0 || x === w - 1 || y === h - 1 ||
-          !mask[y * w + x - 1] || !mask[y * w + x + 1] ||
-          !mask[(y - 1) * w + x] || !mask[(y + 1) * w + x];
-
-        if (isEdge) {
-          overlayCtx.rect(x, y, 1, 1);
-        }
-      }
-    }
-
     overlayCtx.setLineDash([4, 4]);
     overlayCtx.lineDashOffset = state.marchingAntsOffset;
     overlayCtx.strokeStyle = '#000';
     overlayCtx.lineWidth = 1 / state.zoom;
-    overlayCtx.stroke();
+    overlayCtx.stroke(edgePath);
 
     overlayCtx.lineDashOffset = state.marchingAntsOffset + 4;
     overlayCtx.strokeStyle = '#fff';
-    overlayCtx.stroke();
+    overlayCtx.stroke(edgePath);
     overlayCtx.restore();
 
     marchingAntsTimer = requestAnimationFrame(animateAnts);
@@ -768,23 +771,21 @@ function makeTransparent() {
         d[pi + 2] = unpremultiply(b, bg[2], alphaF);
         d[pi + 3] = newAlpha;
       }
-    } else if (mask[i] === 2) {
+    } else if (mask[i] === 2 && borderRadius > 0) {
       // Border pixel: blend based on distance from selection edge
-      // Closer to selection → more processing; farther → less
       const edgeDist = borderDist[i]; // 1 to borderRadius
       const edgeFactor = 1.0 - ((edgeDist - 1) / borderRadius); // 1.0 at edge, ~0 at far
 
-      // Only process if the pixel has some bg color component
       const newAlpha = Math.round((1.0 - (1.0 - dist) * edgeFactor) * a);
 
       if (newAlpha < 1) {
         d[pi] = 0; d[pi+1] = 0; d[pi+2] = 0; d[pi+3] = 0;
       } else {
         const alphaF = newAlpha / 255;
-        // Blend between original color and unpremultiplied color based on edgeFactor
-        const upR = unpremultiply(r, bg[0], dist > 0.001 ? dist : alphaF);
-        const upG = unpremultiply(g, bg[1], dist > 0.001 ? dist : alphaF);
-        const upB = unpremultiply(b, bg[2], dist > 0.001 ? dist : alphaF);
+        // Use actual alpha fraction for unpremultiply (not dist)
+        const upR = unpremultiply(r, bg[0], alphaF);
+        const upG = unpremultiply(g, bg[1], alphaF);
+        const upB = unpremultiply(b, bg[2], alphaF);
         d[pi]     = Math.round(upR * edgeFactor + r * (1 - edgeFactor));
         d[pi + 1] = Math.round(upG * edgeFactor + g * (1 - edgeFactor));
         d[pi + 2] = Math.round(upB * edgeFactor + b * (1 - edgeFactor));
@@ -950,6 +951,10 @@ document.getElementById('btn-download').addEventListener('click', () => {
     return;
   }
   mainCanvas.toBlob((blob) => {
+    if (!blob) {
+      statusInfo.textContent = 'ダウンロードに失敗しました';
+      return;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
