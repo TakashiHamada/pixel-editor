@@ -542,11 +542,11 @@ body {
 /* --- Build Info --- */
 #build-info {
   position: fixed;
-  bottom: 30px;
-  right: 8px;
-  font-size: 10px;
-  color: var(--text-muted);
+  bottom: 32px;
+  right: 10px;
+  font-size: 13px;
+  color: var(--text-primary);
   pointer-events: none;
   z-index: 10;
-  opacity: 0.5;
+  opacity: 0.8;
 }

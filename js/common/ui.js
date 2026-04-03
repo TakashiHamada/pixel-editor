@@ -34,6 +34,33 @@ PE.log = {
   success(msg) { this._show(msg, 'success', 8000); },
   warn(msg)    { this._show(msg, 'warning', 8000); },
   error(msg)   { this._show(msg, 'error', 12000); },
+
+  /**
+   * Copy the current log message to clipboard.
+   */
+  copyToClipboard() {
+    const el = this._getEl();
+    if (!el || !el.textContent) return;
+    navigator.clipboard.writeText(el.textContent).then(() => {
+      const original = el.textContent;
+      const originalClass = el.className;
+      el.textContent = 'Copied to clipboard';
+      el.className = 'log-success';
+      setTimeout(() => {
+        el.textContent = original;
+        el.className = originalClass;
+      }, 1500);
+    });
+  },
+
+  init() {
+    const el = this._getEl();
+    if (el) {
+      el.style.cursor = 'pointer';
+      el.title = 'Click to copy';
+      el.addEventListener('click', () => PE.log.copyToClipboard());
+    }
+  },
 };
 
 /* --- Shortcuts Modal --- */

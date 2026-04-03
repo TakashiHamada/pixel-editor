@@ -127,11 +127,6 @@ PE.tools.transparency = {
             <i class="fa-solid fa-crosshairs"></i> Select
           </button>
         </div>
-        <div class="panel-row" style="margin-top: 2px;">
-          <span class="panel-label" style="font-size: 10px; color: var(--text-muted); min-width: 0;">
-            <i class="fa-solid fa-info-circle"></i> Hold Shift to add to selection
-          </span>
-        </div>
       </div>
 
       <div class="panel-section">

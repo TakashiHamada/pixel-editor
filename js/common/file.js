@@ -97,4 +97,36 @@ PE.file = {
       PE.log.success('Saved: ' + a.download);
     }, 'image/png');
   },
+
+  /**
+   * Close the current image and reset the editor.
+   */
+  close() {
+    const s = PE.state;
+    if (!s.imageData) return;
+
+    s.imageData = null;
+    s.imgWidth = 0;
+    s.imgHeight = 0;
+    s.fileName = '';
+    s.selectionMask = null;
+    s.borderDist = null;
+    s.undoStack = [];
+    s.redoStack = [];
+
+    const mainCanvas = PE.dom.mainCanvas;
+    const overlayCanvas = PE.dom.overlayCanvas;
+    const mainCtx = PE.dom.mainCtx;
+
+    mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+    mainCanvas.width = 0;
+    mainCanvas.height = 0;
+    overlayCanvas.width = 0;
+    overlayCanvas.height = 0;
+    mainCanvas.classList.remove('has-image');
+
+    PE.history.updateUI();
+    PE.overlay.clear();
+    PE.log.info('Image closed');
+  },
 };

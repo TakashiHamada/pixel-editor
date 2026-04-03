@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize common systems
   PE.zoom.init();
   PE.shortcuts.init();
+  PE.log.init();
   PE.history.updateUI();
 
   // File input listener
@@ -71,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Menu bar buttons
   document.getElementById('btn-open').addEventListener('click', () => PE.file.open());
   document.getElementById('btn-save').addEventListener('click', () => PE.file.save());
+  document.getElementById('btn-close').addEventListener('click', () => PE.file.close());
   document.getElementById('btn-shortcuts').addEventListener('click', () => PE.shortcuts.show());
 
   // Register tools
