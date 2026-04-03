@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8b2020"/>
+      <stop offset="100%" stop-color="#5a1414"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect width="32" height="32" rx="6" fill="url(#bg)"/>
+  <!-- Checkerboard pattern (transparency symbol) -->
+  <rect x="4" y="4" width="6" height="6" fill="#fff" opacity="0.25"/>
+  <rect x="10" y="10" width="6" height="6" fill="#fff" opacity="0.25"/>
+  <rect x="4" y="10" width="6" height="6" fill="#fff" opacity="0.12"/>
+  <rect x="10" y="4" width="6" height="6" fill="#fff" opacity="0.12"/>
+  <!-- Pencil / edit icon -->
+  <g transform="translate(8, 6)">
+    <path d="M14 2 L18 6 L8 16 L3 17 L4 12 Z" fill="#fff" opacity="0.95"/>
+    <path d="M14 2 L18 6 L16.5 7.5 L12.5 3.5 Z" fill="#e8e8e8"/>
+    <path d="M14 2 L18 6 L8 16 L3 17 L4 12 Z" fill="none" stroke="#3a1010" stroke-width="1" stroke-linejoin="round"/>
+  </g>
+</svg>
