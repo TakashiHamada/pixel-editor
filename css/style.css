@@ -346,6 +346,7 @@ body {
 .btn-panel.btn-compact {
   width: auto;
   padding: 8px 20px;
+  margin: 0 auto;
 }
 
 .btn-panel i {
