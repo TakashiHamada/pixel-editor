@@ -241,7 +241,7 @@ body {
 }
 
 .panel-row.flash {
-  animation: row-flash 0.15s ease-out;
+  animation: row-flash 0.25s ease-out;
 }
 
 @keyframes row-flash {
