@@ -777,11 +777,16 @@ function makeTransparent() {
   // ---- Pass 2: Defringe (B案) ----
   // Multiple passes, each more aggressive, to clean up residual bg color
   // Uses 3x3 neighborhood analysis for better detection
+  // ONLY operates within/near the selection mask
   const DEFRINGE_PASSES = 3;
   for (let pass = 0; pass < DEFRINGE_PASSES; pass++) {
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
         const i = y * w + x;
+
+        // Only process pixels that were in the selection or border
+        if (!mask[i]) continue;
+
         const pi = i * 4;
         const a = d[pi + 3];
 
@@ -842,10 +847,14 @@ function makeTransparent() {
 
   // ---- Pass 3: Isolated pixel cleanup ----
   // Catch remaining bright pixels in narrow gaps between lines
-  // These are pixels that are still notably brighter than their neighbors
+  // ONLY operates within/near the selection mask
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x;
+
+      // Only process pixels that were in the selection or border
+      if (!mask[i]) continue;
+
       const pi = i * 4;
       const a = d[pi + 3];
 
