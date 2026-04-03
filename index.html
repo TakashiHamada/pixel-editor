@@ -91,8 +91,7 @@ body {
   overflow: hidden;
   position: relative;
   cursor: crosshair;
-  background:
-    repeating-conic-gradient(#3a3a3a 0% 25%, #333 0% 50%) 0 0 / 20px 20px;
+  background: #4a4a4a;
 }
 
 #main-canvas, #overlay-canvas {
@@ -100,6 +99,11 @@ body {
   top: 0;
   left: 0;
   image-rendering: pixelated;
+}
+
+#main-canvas {
+  background:
+    repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0 / 16px 16px;
 }
 
 #overlay-canvas {
@@ -195,7 +199,7 @@ body {
 </div>
 
 <div id="loading"><span>処理中...</span></div>
-<div id="build-info">Last commit: 2026-04-03 18:03 JST</div>
+<div id="build-info">Last commit: 2026-04-03 21:40 JST</div>
 
 <input type="file" id="file-input" accept=".png,image/png" style="display:none">
 
