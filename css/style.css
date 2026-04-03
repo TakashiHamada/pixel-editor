@@ -353,7 +353,9 @@ body {
 
 /* Cursor styles */
 #canvas-container.cursor-crosshair { cursor: crosshair; }
-#canvas-container.cursor-eyedropper { cursor: crosshair; }
+#canvas-container.cursor-eyedropper {
+  cursor: url('../img/cursor-eyedropper.svg') 3 26, crosshair;
+}
 #canvas-container.cursor-pan { cursor: grab; }
 #canvas-container.cursor-pan:active { cursor: grabbing; }
 
