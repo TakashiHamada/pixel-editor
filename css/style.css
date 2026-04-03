@@ -246,6 +246,9 @@ body {
 
 @keyframes row-flash {
   0%   { background: var(--accent-active); border-radius: 4px; }
+  25%  { background: transparent; }
+  50%  { background: var(--accent-active); border-radius: 4px; }
+  75%  { background: transparent; }
   100% { background: transparent; }
 }
 
