@@ -39,6 +39,17 @@ PE.log = {
 /* --- Shortcuts Modal --- */
 PE.shortcuts = {
   show() {
+    // Update the right column with active tool's shortcuts
+    const col = document.getElementById('shortcuts-tool-column');
+    if (col) {
+      const tool = PE.toolRegistry && PE.toolRegistry[PE.state.activeTool];
+      if (tool && tool.getShortcutsHTML) {
+        col.innerHTML = tool.getShortcutsHTML();
+      } else {
+        col.innerHTML = '<div class="modal-title modal-title-muted">'
+          + '<i class="fa-solid fa-puzzle-piece"></i> No tool selected</div>';
+      }
+    }
     const modal = document.getElementById('shortcuts-modal');
     if (modal) modal.classList.add('visible');
   },

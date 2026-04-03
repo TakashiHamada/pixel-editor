@@ -17,6 +17,28 @@ PE.tools.transparency = {
   label: 'Transparency',
   icon: 'fa-eraser',
 
+  description: 'Remove background colors from sprites and game assets. '
+    + 'Extract a background color with the eyedropper, select a region by flood-fill, '
+    + 'then apply transparency. Supports tolerance and border feathering for clean edges.',
+
+  /**
+   * Return HTML for the right column of the shortcuts modal.
+   */
+  getShortcutsHTML() {
+    return `
+      <div class="modal-title">
+        <i class="fa-solid fa-eraser"></i> Transparency Tool
+      </div>
+      <p class="tool-description">${this.description}</p>
+      <ul class="shortcut-list">
+        <li><span class="shortcut-desc">Eyedropper mode</span> <span class="shortcut-key">E</span></li>
+        <li><span class="shortcut-desc">Select mode</span> <span class="shortcut-key">S</span></li>
+        <li><span class="shortcut-desc">Add to selection</span> <span class="shortcut-key">Shift + Click</span></li>
+        <li><span class="shortcut-desc">Make transparent</span> <span class="shortcut-key">Delete</span></li>
+      </ul>
+    `;
+  },
+
   // Tool-specific state
   bgColor: [255, 255, 255],
   tolerance: 32,

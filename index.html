@@ -68,26 +68,33 @@
      ============================================================ -->
 <div id="shortcuts-modal">
   <div class="modal-content">
-    <div class="modal-title">
-      <i class="fa-solid fa-keyboard"></i> Keyboard Shortcuts
+    <div class="modal-columns">
+      <!-- Left: Common shortcuts -->
+      <div class="modal-column">
+        <div class="modal-title">
+          <i class="fa-solid fa-keyboard"></i> Common Shortcuts
+        </div>
+        <ul class="shortcut-list">
+          <li><span class="shortcut-desc">Open file</span> <span class="shortcut-key">Ctrl + O</span></li>
+          <li><span class="shortcut-desc">Save file</span> <span class="shortcut-key">Ctrl + S</span></li>
+          <li><span class="shortcut-desc">Undo</span> <span class="shortcut-key">Ctrl + Z</span></li>
+          <li><span class="shortcut-desc">Redo</span> <span class="shortcut-key">Ctrl + Shift + Z</span></li>
+          <li><span class="shortcut-desc">Zoom in</span> <span class="shortcut-key">Ctrl + =</span></li>
+          <li><span class="shortcut-desc">Zoom out</span> <span class="shortcut-key">Ctrl + -</span></li>
+          <li><span class="shortcut-desc">Zoom (mouse)</span> <span class="shortcut-key">Scroll wheel</span></li>
+          <li><span class="shortcut-desc">Fit to view</span> <span class="shortcut-key">0</span></li>
+          <li><span class="shortcut-desc">Pan</span> <span class="shortcut-key">Space + Drag</span></li>
+          <li><span class="shortcut-desc">Pan (mouse)</span> <span class="shortcut-key">Middle + Drag</span></li>
+          <li><span class="shortcut-desc">Show shortcuts</span> <span class="shortcut-key">?</span></li>
+        </ul>
+      </div>
+      <!-- Right: Active tool shortcuts (populated dynamically) -->
+      <div class="modal-column" id="shortcuts-tool-column">
+        <div class="modal-title modal-title-muted">
+          <i class="fa-solid fa-puzzle-piece"></i> No tool selected
+        </div>
+      </div>
     </div>
-    <ul class="shortcut-list">
-      <li><span class="shortcut-desc">Open file</span> <span class="shortcut-key">Ctrl + O</span></li>
-      <li><span class="shortcut-desc">Save file</span> <span class="shortcut-key">Ctrl + S</span></li>
-      <li><span class="shortcut-desc">Undo</span> <span class="shortcut-key">Ctrl + Z</span></li>
-      <li><span class="shortcut-desc">Redo</span> <span class="shortcut-key">Ctrl + Shift + Z</span></li>
-      <li><span class="shortcut-desc">Zoom in</span> <span class="shortcut-key">Ctrl + =</span></li>
-      <li><span class="shortcut-desc">Zoom out</span> <span class="shortcut-key">Ctrl + -</span></li>
-      <li><span class="shortcut-desc">Zoom (mouse)</span> <span class="shortcut-key">Scroll wheel</span></li>
-      <li><span class="shortcut-desc">Fit to view</span> <span class="shortcut-key">0</span></li>
-      <li><span class="shortcut-desc">Pan</span> <span class="shortcut-key">Space + Drag</span></li>
-      <li><span class="shortcut-desc">Pan (mouse)</span> <span class="shortcut-key">Middle click + Drag</span></li>
-      <li><span class="shortcut-desc">Eyedropper mode</span> <span class="shortcut-key">E</span></li>
-      <li><span class="shortcut-desc">Select mode</span> <span class="shortcut-key">S</span></li>
-      <li><span class="shortcut-desc">Add to selection</span> <span class="shortcut-key">Shift + Click</span></li>
-      <li><span class="shortcut-desc">Make transparent</span> <span class="shortcut-key">Delete</span></li>
-      <li><span class="shortcut-desc">Show shortcuts</span> <span class="shortcut-key">?</span></li>
-    </ul>
     <div class="modal-close">
       <button class="btn" id="shortcuts-close">Close</button>
     </div>
@@ -102,7 +109,7 @@
 </div>
 
 <!-- Build info -->
-<div id="build-info">Last commit: 2026-04-04 06:09 JST</div>
+<div id="build-info">Last commit: 2026-04-04 06:13 JST</div>
 
 <!-- Hidden file input -->
 <input type="file" id="file-input" accept="image/*" style="display:none">
