@@ -185,7 +185,7 @@ body {
 /* Panel Sections */
 .panel-section {
   border-bottom: 1px solid var(--border-color);
-  padding: 12px;
+  padding: 14px 12px;
 }
 
 .panel-section-title {
@@ -233,7 +233,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .panel-row:last-child {
@@ -282,15 +282,17 @@ body {
   font-size: 11px;
   font-family: monospace;
   color: var(--text-primary);
-  min-width: 30px;
-  text-align: right;
+  width: 28px;
+  min-width: 28px;
+  text-align: left;
   flex-shrink: 0;
+  padding-left: 2px;
 }
 
 /* Color preview */
 .color-preview {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   border: 2px solid var(--border-light);
   border-radius: 3px;
   background: #fff;
@@ -306,7 +308,7 @@ body {
 /* Panel buttons */
 .btn-panel {
   width: 100%;
-  padding: 7px 12px;
+  padding: 9px 12px;
   border: 1px solid var(--border-light);
   border-radius: 3px;
   background: var(--bg-light);
