@@ -107,9 +107,10 @@ PE.shortcuts = {
   },
 };
 
-/* --- Selection overlay (marching ants) --- */
+/* --- Selection overlay (soft glow pulse) --- */
 PE.overlay = {
   _timer: null,
+  _startTime: 0,
 
   clear() {
     const ctx = PE.dom.overlayCtx;
@@ -121,8 +122,8 @@ PE.overlay = {
   },
 
   /**
-   * Draw the selection overlay with marching ants.
-   * Supports both interior (mask=1) and border (mask=2) regions.
+   * Draw the selection overlay with a soft pulsing glow edge.
+   * Interior fill is a subtle tint; edges breathe gently.
    * @param {Uint8Array} mask - selection mask
    * @param {Float32Array} borderDist - distance field for border pixels
    * @param {number} borderRadius - max border expansion radius
@@ -135,66 +136,93 @@ PE.overlay = {
     const h = PE.state.imgHeight;
     const ctx = PE.dom.overlayCtx;
 
-    // Build overlay image
-    const imgData = ctx.createImageData(w, h);
-    const od = imgData.data;
+    // Precompute: classify each pixel as interior fill, border zone, or edge
+    // Edge = selected pixel adjacent to a non-selected pixel
+    const EDGE = 1, INTERIOR = 2, BORDER = 3;
+    const classify = new Uint8Array(w * h);
 
     for (let i = 0; i < mask.length; i++) {
-      if (mask[i] === 1) {
-        od[i * 4] = 0;
-        od[i * 4 + 1] = 120;
-        od[i * 4 + 2] = 255;
-        od[i * 4 + 3] = 40;
-      } else if (mask[i] === 2 && borderRadius > 0) {
+      if (!mask[i]) continue;
+      if (mask[i] === 2) {
+        classify[i] = BORDER;
+        continue;
+      }
+      // mask[i] === 1: check if edge
+      const x = i % w;
+      const y = (i - x) / w;
+      const isEdge =
+        x === 0 || y === 0 || x === w - 1 || y === h - 1 ||
+        !mask[i - 1] || !mask[i + 1] ||
+        !mask[i - w] || !mask[i + w];
+      classify[i] = isEdge ? EDGE : INTERIOR;
+    }
+
+    // Build base overlay image (static parts)
+    const baseData = ctx.createImageData(w, h);
+    const bd = baseData.data;
+
+    for (let i = 0; i < classify.length; i++) {
+      const c = classify[i];
+      if (c === INTERIOR) {
+        // Subtle cool blue tint
+        bd[i * 4]     = 100;
+        bd[i * 4 + 1] = 160;
+        bd[i * 4 + 2] = 255;
+        bd[i * 4 + 3] = 25;
+      } else if (c === BORDER && borderRadius > 0) {
+        // Warm orange fade for feathered border
         const edgeFactor = 1.0 - ((borderDist[i] - 1) / borderRadius);
-        od[i * 4] = 255;
-        od[i * 4 + 1] = 165;
-        od[i * 4 + 2] = 0;
-        od[i * 4 + 3] = Math.round(60 * edgeFactor);
+        bd[i * 4]     = 255;
+        bd[i * 4 + 1] = 170;
+        bd[i * 4 + 2] = 50;
+        bd[i * 4 + 3] = Math.round(40 * edgeFactor);
       }
-    }
-    ctx.putImageData(imgData, 0, 0);
-
-    // Precompute edge path
-    const edgePath = new Path2D();
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (!mask[y * w + x]) continue;
-        const isEdge =
-          x === 0 || y === 0 || x === w - 1 || y === h - 1 ||
-          !mask[y * w + x - 1] || !mask[y * w + x + 1] ||
-          !mask[(y - 1) * w + x] || !mask[(y + 1) * w + x];
-        if (isEdge) {
-          edgePath.rect(x, y, 1, 1);
-        }
-      }
+      // EDGE pixels are drawn dynamically in the animation
     }
 
-    // Animate marching ants
-    const s = PE.state;
+    // Collect edge pixel indices for fast iteration
+    const edgeIndices = [];
+    for (let i = 0; i < classify.length; i++) {
+      if (classify[i] === EDGE) edgeIndices.push(i);
+    }
+
+    // Smooth breathing animation
+    this._startTime = performance.now();
     const self = this;
 
-    function animate() {
-      s.marchingAntsOffset = (s.marchingAntsOffset + 1) % 12;
+    function animate(now) {
+      // Slow sine wave: 2.5s period, gentle alpha range
+      const t = (now - self._startTime) / 2500;
+      const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+      // Edge glow alpha: breathe between 40 and 110
+      const edgeAlpha = Math.round(40 + 70 * pulse);
+      // Edge color: soft cyan-white glow
+      const edgeR = Math.round(140 + 80 * pulse);
+      const edgeG = Math.round(200 + 40 * pulse);
+      const edgeB = 255;
+
+      // Copy base image and stamp edge pixels
+      const frameData = new ImageData(
+        new Uint8ClampedArray(baseData.data),
+        w, h
+      );
+      const fd = frameData.data;
+
+      for (let j = 0; j < edgeIndices.length; j++) {
+        const i = edgeIndices[j];
+        fd[i * 4]     = edgeR;
+        fd[i * 4 + 1] = edgeG;
+        fd[i * 4 + 2] = edgeB;
+        fd[i * 4 + 3] = edgeAlpha;
+      }
+
       ctx.clearRect(0, 0, w, h);
-      ctx.putImageData(imgData, 0, 0);
-
-      ctx.save();
-      ctx.setLineDash([4, 4]);
-      ctx.lineDashOffset = s.marchingAntsOffset;
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 1 / s.zoom;
-      ctx.stroke(edgePath);
-
-      ctx.lineDashOffset = s.marchingAntsOffset + 4;
-      ctx.strokeStyle = '#fff';
-      ctx.stroke(edgePath);
-      ctx.restore();
+      ctx.putImageData(frameData, 0, 0);
 
       self._timer = requestAnimationFrame(animate);
     }
 
-    animate();
+    this._timer = requestAnimationFrame(animate);
   },
 };
 
