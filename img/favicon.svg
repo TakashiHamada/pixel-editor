@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8b2020"/>
+      <stop offset="100%" stop-color="#5a1414"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="url(#bg)"/>
+  <!-- Pixel grid (4x4 cells) -->
+  <g opacity="0.9">
+    <rect x="3"  y="3"  width="6" height="6" rx="0.5" fill="#e8c8c8"/>
+    <rect x="10" y="3"  width="6" height="6" rx="0.5" fill="#d4a0a0"/>
+    <rect x="3"  y="10" width="6" height="6" rx="0.5" fill="#f0d8d8"/>
+    <rect x="10" y="10" width="6" height="6" rx="0.5" fill="#c07070"/>
+    <rect x="17" y="3"  width="6" height="6" rx="0.5" fill="#f5e0e0"/>
+    <rect x="17" y="10" width="6" height="6" rx="0.5" fill="#e0b0b0"/>
+    <rect x="3"  y="17" width="6" height="6" rx="0.5" fill="#d09090"/>
+    <rect x="10" y="17" width="6" height="6" rx="0.5" fill="#e8c0c0"/>
+    <rect x="17" y="17" width="6" height="6" rx="0.5" fill="#fff" opacity="0.95"/>
+  </g>
+  <!-- Cursor crosshair on active pixel (bottom-right) -->
+  <g stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.95">
+    <line x1="20" y1="14.5" x2="20" y2="17"/>
+    <line x1="20" y1="22" x2="20" y2="24.5"/>
+    <line x1="14.5" y1="20" x2="17" y2="20"/>
+    <line x1="22" y1="20" x2="24.5" y2="20"/>
+  </g>
+  <circle cx="20" cy="20" r="0.8" fill="#fff"/>
+</svg>
