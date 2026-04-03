@@ -40,8 +40,9 @@ body {
   white-space: nowrap;
 }
 
-#toolbar button:hover { background: #555; }
+#toolbar button:hover:not(:disabled) { background: #555; }
 #toolbar button.active { background: #0078d4; border-color: #0078d4; color: #fff; }
+#toolbar button:disabled { opacity: 0.4; cursor: default; }
 
 .toolbar-separator {
   width: 1px;
@@ -148,12 +149,20 @@ body {
   <div class="toolbar-separator"></div>
   <button id="btn-make-transparent" title="選択領域を透明化">透明化</button>
   <div class="toolbar-separator"></div>
+  <button id="btn-undo" title="元に戻す (Ctrl+Z)" disabled>戻す</button>
+  <div class="toolbar-separator"></div>
   <button id="btn-download" title="PNGとしてダウンロード">ダウンロード</button>
   <div class="toolbar-separator"></div>
   <div class="toolbar-group">
     <span class="toolbar-label">許容値:</span>
     <input type="range" id="toleranceSlider" min="1" max="100" value="32">
     <span id="toleranceValue">32</span>
+  </div>
+  <div class="toolbar-separator"></div>
+  <div class="toolbar-group">
+    <span class="toolbar-label">境界幅:</span>
+    <input type="range" id="borderRadiusSlider" min="0" max="10" value="4">
+    <span id="borderRadiusValue">4</span>
   </div>
   <div class="toolbar-separator"></div>
   <div class="toolbar-group">
@@ -202,7 +211,10 @@ const state = {
   panStartPanX: 0,
   panStartPanY: 0,
   marchingAntsOffset: 0,
+  undoStack: [],             // Array of ImageData snapshots (max 10)
 };
+
+const MAX_UNDO = 10;
 
 // ============================================================
 // DOM refs
@@ -215,6 +227,9 @@ const overlayCtx = overlayCanvas.getContext('2d');
 const fileInput = document.getElementById('file-input');
 const toleranceSlider = document.getElementById('toleranceSlider');
 const toleranceValue = document.getElementById('toleranceValue');
+const borderRadiusSlider = document.getElementById('borderRadiusSlider');
+const borderRadiusValue = document.getElementById('borderRadiusValue');
+const btnUndo = document.getElementById('btn-undo');
 const bgColorPreview = document.getElementById('bgColorPreview');
 const bgColorHex = document.getElementById('bgColorHex');
 const statusTool = document.getElementById('status-tool');
@@ -244,12 +259,53 @@ document.getElementById('btn-eyedropper').addEventListener('click', () => setToo
 document.getElementById('btn-select').addEventListener('click', () => setTool('select'));
 
 // ============================================================
-// Tolerance
+// Tolerance & Border Radius
 // ============================================================
 toleranceSlider.addEventListener('input', () => {
   state.tolerance = parseInt(toleranceSlider.value);
   toleranceValue.textContent = state.tolerance;
 });
+
+borderRadiusSlider.addEventListener('input', () => {
+  state.borderRadius = parseInt(borderRadiusSlider.value);
+  borderRadiusValue.textContent = state.borderRadius;
+});
+
+// ============================================================
+// Undo
+// ============================================================
+function pushUndo() {
+  // Save a copy of current imageData
+  const copy = new ImageData(
+    new Uint8ClampedArray(state.imageData.data),
+    state.imgWidth,
+    state.imgHeight
+  );
+  state.undoStack.push(copy);
+  if (state.undoStack.length > MAX_UNDO) {
+    state.undoStack.shift();
+  }
+  updateUndoButton();
+}
+
+function performUndo() {
+  if (state.undoStack.length === 0) return;
+  const prev = state.undoStack.pop();
+  state.imageData = prev;
+  mainCtx.putImageData(state.imageData, 0, 0);
+  state.selectionMask = null;
+  state.borderDist = null;
+  clearOverlay();
+  updateUndoButton();
+  statusInfo.textContent = `元に戻しました (残り${state.undoStack.length}回)`;
+}
+
+function updateUndoButton() {
+  btnUndo.disabled = state.undoStack.length === 0;
+  btnUndo.title = `元に戻す (Ctrl+Z) [${state.undoStack.length}/${MAX_UNDO}]`;
+}
+
+btnUndo.addEventListener('click', performUndo);
 
 // ============================================================
 // Open file
@@ -273,6 +329,8 @@ fileInput.addEventListener('change', (e) => {
       mainCtx.drawImage(img, 0, 0);
       state.imageData = mainCtx.getImageData(0, 0, img.width, img.height);
       state.selectionMask = null;
+      state.undoStack = [];
+      updateUndoButton();
       clearOverlay();
       fitImageToView();
       statusInfo.textContent = `${img.width} x ${img.height}`;
@@ -483,7 +541,7 @@ function floodFillSelect(startX, startY) {
     // Expand selection border using distance field (A案: 境界拡張)
     // Compute distance from selection edge for non-selected pixels
     // Use BFS from the selection boundary outward, up to BORDER_RADIUS pixels
-    const BORDER_RADIUS = 4;
+    const BORDER_RADIUS = state.borderRadius;
     const expandedMask = new Uint8Array(mask);  // 0=none, 1=interior
     const borderDist = new Float32Array(w * h); // distance from selection edge
 
@@ -632,6 +690,7 @@ document.getElementById('btn-make-transparent').addEventListener('click', () => 
   }
   showLoading(true);
   setTimeout(() => {
+    pushUndo();
     makeTransparent();
     showLoading(false);
   }, 10);
@@ -896,6 +955,10 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'e' || e.key === 'E') setTool('eyedropper');
   if (e.key === 's' || e.key === 'S') { if (!e.ctrlKey && !e.metaKey) setTool('select'); }
   if (e.key === '0') fitImageToView();
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    e.preventDefault();
+    performUndo();
+  }
 });
 </script>
 </body>
