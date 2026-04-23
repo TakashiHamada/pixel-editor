@@ -67,6 +67,7 @@ PE.tools.myTool = {
 - **Tool isolation** — tools own their left panel entirely (build/destroy on activate/deactivate)
 - **Cursor management** — tools set CSS classes on `#canvas-container` (`cursor-eyedropper`, `cursor-crosshair`); ID-level default is `cursor: default` so class selectors win
 - **Button states** — buttons reflect availability (Open disabled when image loaded, Download/Close disabled when no image, Make Transparent disabled when no selection)
+- **Sub-tool section disable pattern** — When a tool has mutually exclusive sub-tools represented by selectable section titles (e.g., Transparency's Extract / Select, Scanner's Crop Region / Adjust), the inactive section's body **must be dimmed and click-disabled** via the `.panel-section.disabled` class. Only the section title stays interactive so the user can switch modes by clicking it. Tools whose sections are not mutually exclusive modes (e.g., Marker — Pencil / Layers / Brush are always live together) simply never apply this class. Keep the interaction model consistent: if a new tool introduces mode-group sections, it must gate their bodies.
 
 ## Owner's UI/UX Preferences
 

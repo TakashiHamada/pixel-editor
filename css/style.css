@@ -228,6 +228,14 @@ body {
   color: #fff;
 }
 
+/* When a sub-tool section is not the active mode, dim and disable its body
+   (sliders, buttons, inputs). The title stays interactive so the user can
+   still click it to switch modes. Applied per tool via a `.disabled` class. */
+.panel-section.disabled > :not(.panel-section-title) {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 /* Panel Row */
 .panel-row {
   display: flex;

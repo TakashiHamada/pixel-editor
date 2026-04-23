@@ -199,6 +199,13 @@ PE.tools.transparency = {
       if (selTitle) selTitle.classList.add('active');
       if (eyeTitle) eyeTitle.classList.remove('active');
     }
+
+    // Disable the inactive section's body (sliders / buttons) while keeping
+    // its title clickable. See CLAUDE.md - "Sub-tool section disable pattern".
+    const eyeSec = eyeTitle && eyeTitle.closest('.panel-section');
+    const selSec = selTitle && selTitle.closest('.panel-section');
+    if (eyeSec) eyeSec.classList.toggle('disabled', name !== 'eyedropper');
+    if (selSec) selSec.classList.toggle('disabled', name !== 'select');
   },
 
   _updateColorDisplay() {

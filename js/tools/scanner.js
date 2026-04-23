@@ -225,6 +225,12 @@ PE.tools.scanner = {
     if (warpTitle) warpTitle.classList.toggle('active', name === 'warp');
     if (adjTitle) adjTitle.classList.toggle('active', name === 'adjust');
 
+    // Disable the inactive section's body. See CLAUDE.md - "Sub-tool section disable pattern".
+    const warpSec = warpTitle && warpTitle.closest('.panel-section');
+    const adjSec = adjTitle && adjTitle.closest('.panel-section');
+    if (warpSec) warpSec.classList.toggle('disabled', name !== 'warp');
+    if (adjSec) adjSec.classList.toggle('disabled', name !== 'adjust');
+
     const container = PE.dom.container;
     container.classList.remove('cursor-crosshair');
 
