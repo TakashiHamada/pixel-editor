@@ -204,7 +204,11 @@ PE.dom.mainCtx.putImageData(s.imageData, 0, 0);
 | `[` / `]` | Brush/Eraser size − / + § |
 | `N` | New color layer § |
 
-\† Transparency tool only  \‡ Scanner tool only  \§ Marker tool only (tool-scoped — each tool owns its single-letter keys)
+- † Transparency tool only
+- ‡ Scanner tool only
+- § Marker tool only
+
+Each tool owns its own single-letter keys while active, so `E` means Eyedropper while Transparency is active and Eraser while Marker is active.
 
 ## Theme
 

@@ -61,11 +61,26 @@ PE.file = {
     // buttons stay enabled so the user can browse what each tool looks like.
     // `.locked` blocks the mouse via CSS; `inert` also removes focus + keyboard
     // from every descendant so Tab can't sneak into preview-state controls.
+    // Fallback for browsers that predate `inert` (Safari < 15.5, Firefox <
+    // 112): toggle tabindex="-1" on every focusable descendant so keyboard
+    // navigation can't mutate tool state while the panel is locked.
+    // PE.panels.setActiveSection re-establishes per-control tabindex when the
+    // tool re-activates after unlock, so clearing on unlock is safe.
     const panel = document.getElementById('left-panel');
     if (panel) {
       panel.classList.toggle('locked', !hasImage);
-      if (hasImage) panel.removeAttribute('inert');
-      else panel.setAttribute('inert', '');
+      const inertSupported = 'inert' in HTMLElement.prototype;
+      if (inertSupported) {
+        if (hasImage) panel.removeAttribute('inert');
+        else panel.setAttribute('inert', '');
+      } else {
+        panel.querySelectorAll(
+          'input, button, select, textarea, a[href], [tabindex]'
+        ).forEach(el => {
+          if (hasImage) el.removeAttribute('tabindex');
+          else el.setAttribute('tabindex', '-1');
+        });
+      }
     }
 
     // No image → also strip any tool-cursor classes on the canvas. Without
@@ -119,12 +134,16 @@ PE.file = {
     const mainCtx = PE.dom.mainCtx;
 
     // If an image is already loaded (e.g. drag-dropping a new file while the
-    // Close button is hidden), notify the active tool so it drops any
-    // image-sized state (Scanner corners, Marker layers, etc.) before we
-    // overwrite s.imageData. The later deactivate()/activate() cycle gives
-    // the tool a clean slate that matches the new image dimensions.
+    // Close button is hidden), let the active tool veto the replacement and,
+    // if allowed, drop any image-sized state (Scanner corners, Marker layers,
+    // etc.) before we overwrite s.imageData. The later deactivate()/activate()
+    // cycle gives the tool a clean slate that matches the new image's size.
     if (s.imageData) {
       const prev = s.activeTool && PE.toolRegistry && PE.toolRegistry[s.activeTool];
+      if (prev && prev.canDeactivate && !prev.canDeactivate()) {
+        // User declined (e.g. Marker with unsaved layers). Keep current image.
+        return;
+      }
       if (prev && prev.onImageClose) prev.onImageClose();
     }
 
