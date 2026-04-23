@@ -647,3 +647,184 @@ body {
   color: var(--text-muted);
   font-family: monospace;
 }
+
+/* --- Panel helpers shared by Scanner / Marker --- */
+.panel-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.panel-checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent-active);
+  cursor: pointer;
+}
+
+.panel-color-input {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+#canvas-container.cursor-brush { cursor: crosshair; }
+
+/* --- Scanner: warp overlay & handles --- */
+.warp-svg {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.warp-polygon {
+  fill: rgba(200, 40, 40, 0.08);
+  stroke: rgba(200, 40, 40, 0.9);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+
+.warp-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: rgba(200, 40, 40, 0.9);
+  border: 2px solid #fff;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+  z-index: 6;
+  touch-action: none;
+}
+
+.warp-handle:active { cursor: grabbing; }
+
+/* --- Marker: layer list --- */
+.layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.layer-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 6px 2px;
+  font-style: italic;
+}
+
+.layer-row {
+  background: var(--bg-medium);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.layer-row:hover {
+  background: var(--bg-light);
+}
+
+.layer-row.active {
+  border-color: var(--accent-active);
+  box-shadow: 0 0 4px var(--accent-glow);
+}
+
+.layer-row.layer-hidden {
+  opacity: 0.55;
+}
+
+.layer-row-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 5px;
+}
+
+.layer-row-bot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.layer-active-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-light);
+  flex-shrink: 0;
+}
+
+.layer-row.active .layer-active-dot {
+  background: var(--accent-active);
+  box-shadow: 0 0 4px var(--accent-active);
+}
+
+.layer-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-secondary);
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.layer-btn:hover {
+  background: var(--bg-lighter);
+  color: var(--text-primary);
+}
+
+.layer-btn.layer-del:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.layer-color {
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.layer-hex {
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--text-primary);
+}
+
+.layer-spacer { flex: 1; }
+
+/* --- Marker: brush mode buttons (side-by-side) --- */
+.mk-mode-row {
+  gap: 6px;
+}
+
+.mk-mode-btn {
+  flex: 1;
+  padding: 7px 6px;
+  font-size: 11px;
+}
+
+.mk-mode-btn.active {
+  background: var(--accent);
+  border-color: var(--accent-active);
+  color: #fff;
+}

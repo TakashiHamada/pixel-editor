@@ -16,6 +16,7 @@ PE.tools.transparency = {
   id: 'transparency',
   label: 'Transparency',
   icon: 'fa-eraser',
+  saveFormat: 'png',
 
   description: 'Remove background colors from sprites and game assets. '
     + 'Extract a background color with the eyedropper, select a region by flood-fill, '

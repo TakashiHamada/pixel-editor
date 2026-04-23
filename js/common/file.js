@@ -27,7 +27,17 @@ PE.file = {
   },
 
   /**
+   * Resolve save format ('png' | 'jpeg') based on active tool.
+   * Tools may set a `saveFormat` property; default is 'png'.
+   */
+  _saveFormat() {
+    const tool = PE.toolRegistry && PE.toolRegistry[PE.state.activeTool];
+    return (tool && tool.saveFormat === 'jpeg') ? 'jpeg' : 'png';
+  },
+
+  /**
    * Update menu bar button states based on whether an image is loaded.
+   * Also refresh the Download button's label to reflect the active tool's format.
    */
   _updateButtons() {
     const hasImage = !!PE.state.imageData;
@@ -35,7 +45,13 @@ PE.file = {
     const btnSave = document.getElementById('btn-save');
     const btnClose = document.getElementById('btn-close');
     if (btnOpen) btnOpen.disabled = hasImage;
-    if (btnSave) btnSave.disabled = !hasImage;
+    if (btnSave) {
+      btnSave.disabled = !hasImage;
+      const fmt = PE.file._saveFormat();
+      const label = fmt === 'jpeg' ? 'Download (JPEG)' : 'Download (PNG)';
+      btnSave.innerHTML = `<i class="fa-solid fa-download"></i> ${label}`;
+      btnSave.title = `${label} (Ctrl+S)`;
+    }
     if (btnClose) btnClose.disabled = !hasImage;
   },
 
@@ -110,7 +126,10 @@ PE.file = {
   },
 
   /**
-   * Save / download the current image as PNG.
+   * Save / download the current image.
+   * Format (PNG/JPEG) is chosen by the active tool's saveFormat property.
+   * If the tool provides getExportCanvas(), that canvas is used instead of the main canvas
+   * (e.g. Marker flattens layers onto a white background).
    */
   save() {
     const s = PE.state;
@@ -119,8 +138,15 @@ PE.file = {
       return;
     }
 
-    const mainCanvas = PE.dom.mainCanvas;
-    mainCanvas.toBlob((blob) => {
+    const fmt = PE.file._saveFormat();
+    const mime = fmt === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const ext = fmt === 'jpeg' ? 'jpg' : 'png';
+    const tool = PE.toolRegistry && PE.toolRegistry[s.activeTool];
+    const sourceCanvas = (tool && tool.getExportCanvas)
+      ? tool.getExportCanvas()
+      : PE.dom.mainCanvas;
+
+    sourceCanvas.toBlob((blob) => {
       if (!blob) {
         PE.log.error('Save failed');
         return;
@@ -128,16 +154,15 @@ PE.file = {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      // Use original filename with _edited suffix
       const baseName = s.fileName.replace(/\.[^.]+$/, '');
-      a.download = `${baseName}_edited.png`;
+      a.download = `${baseName}_edited.${ext}`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       s.fileSize = blob.size;
-      s.fileType = 'image/png';
+      s.fileType = mime;
       PE.file._updateImageInfo();
       PE.log.success(`Downloaded: ${a.download} (${PE.file._formatSize(blob.size)})`);
-    }, 'image/png');
+    }, mime, fmt === 'jpeg' ? 0.92 : undefined);
   },
 
   /**

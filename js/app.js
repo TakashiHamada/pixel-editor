@@ -42,6 +42,8 @@ PE.activateTool = function(toolId) {
     tool.activate();
     PE.log.info(`Tool: ${tool.label}`);
   }
+  // Download button label depends on active tool's saveFormat
+  PE.file._updateButtons();
 };
 
 // ============================================================
@@ -79,6 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Register tools
   PE.registerTool(PE.tools.transparency);
+  PE.registerTool(PE.tools.scanner);
+  PE.registerTool(PE.tools.marker);
 
   // Build tool buttons in menu bar center
   const center = document.getElementById('menubar-center');

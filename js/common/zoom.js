@@ -6,6 +6,9 @@ window.PE = window.PE || {};
 
 PE.zoom = {
   spaceDown: false,
+  // Listeners fired after every transform change. Used by tools that render
+  // DOM overlays (e.g. Scanner's warp handles) in screen space.
+  transformListeners: [],
 
   /**
    * Apply current zoom and pan to both canvases.
@@ -20,6 +23,8 @@ PE.zoom = {
 
     const el = document.getElementById('zoom-level');
     if (el) el.textContent = `${Math.round(s.zoom * 100)}%`;
+
+    for (const fn of PE.zoom.transformListeners) fn();
   },
 
   /**
