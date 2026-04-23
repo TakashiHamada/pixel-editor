@@ -408,7 +408,7 @@ body {
   pointer-events: none;
 }
 
-/* Drop guide (shown when no image loaded) */
+/* Drop guide (shown when no image loaded). Clickable to open file dialog. */
 #drop-guide {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -416,9 +416,23 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   color: var(--text-muted);
   gap: 12px;
+  transition: color 0.15s;
+}
+
+#drop-guide:hover {
+  color: var(--text-secondary);
+}
+
+#drop-guide:hover i {
+  opacity: 0.75;
+}
+
+#drop-guide:hover p {
+  color: var(--text-primary);
 }
 
 #drop-guide i {

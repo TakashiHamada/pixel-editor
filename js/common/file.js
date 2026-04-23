@@ -202,11 +202,16 @@ PE.file = {
   },
 
   /**
-   * Initialize drag & drop on the canvas container.
+   * Initialize drag & drop on the canvas container, and make the drop guide
+   * clickable as a shortcut for the Open button.
    */
   initDragDrop() {
     const container = PE.dom.container;
     let dragCounter = 0;
+
+    // Click the central drop guide to open the file dialog.
+    const guide = document.getElementById('drop-guide');
+    if (guide) guide.addEventListener('click', () => PE.file.open());
 
     container.addEventListener('dragenter', (e) => {
       e.preventDefault();
