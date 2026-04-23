@@ -38,6 +38,8 @@ PE.file = {
   /**
    * Update menu bar button states based on whether an image is loaded.
    * Also refresh the Download button's label to reflect the active tool's format.
+   * When no image is loaded, tool selector buttons and the entire left panel
+   * are locked so the user cannot invoke any feature without an image.
    */
   _updateButtons() {
     const hasImage = !!PE.state.imageData;
@@ -53,6 +55,14 @@ PE.file = {
       btnSave.title = `${label} (Ctrl+S)`;
     }
     if (btnClose) btnClose.disabled = !hasImage;
+
+    // Tool selector buttons: no image = nothing to do with them.
+    document.querySelectorAll('.btn-tool').forEach(btn => {
+      btn.disabled = !hasImage;
+    });
+    // Lock the entire left panel body when no image is loaded.
+    const panel = document.getElementById('left-panel');
+    if (panel) panel.classList.toggle('locked', !hasImage);
   },
 
   /**

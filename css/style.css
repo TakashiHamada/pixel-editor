@@ -169,6 +169,12 @@ body {
   display: flex;
 }
 
+/* Panel-wide lock when no image is loaded: the entire tool UI is inert. */
+#left-panel.locked {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 #left-panel::-webkit-scrollbar {
   width: 6px;
 }
