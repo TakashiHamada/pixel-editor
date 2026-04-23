@@ -32,7 +32,7 @@ PE.tools.marker = {
       <ul class="shortcut-list">
         <li><span class="shortcut-desc">Brush</span> <span class="shortcut-key">B</span></li>
         <li><span class="shortcut-desc">Eraser</span> <span class="shortcut-key">E</span></li>
-        <li><span class="shortcut-desc">Brush size</span> <span class="shortcut-key">[ / ]</span></li>
+        <li><span class="shortcut-desc">Size (active tool)</span> <span class="shortcut-key">[ / ]</span></li>
         <li><span class="shortcut-desc">New color layer</span> <span class="shortcut-key">N</span></li>
         <li><span class="shortcut-desc">Undo stroke</span> <span class="shortcut-key">Ctrl + Z</span></li>
       </ul>
@@ -48,13 +48,14 @@ PE.tools.marker = {
   _nextLayerId: 1,
 
   brushSize: 24,
-  brushMode: 'brush',     // 'brush' | 'eraser'
+  eraserSize: 40,
   pressureEnabled: true,
 
   // Which section ("sub-tool") is currently focused. Mirrors the mode-group
   // pattern used by Transparency and Scanner: only the active section's
-  // controls are interactive, canvas painting only works while 'brush'.
-  activeSection: 'pencil', // 'pencil' | 'layers' | 'brush'
+  // controls are interactive. Canvas painting works while 'brush' or
+  // 'eraser' — the section itself determines the stroke mode.
+  activeSection: 'pencil', // 'pencil' | 'layers' | 'brush' | 'eraser'
 
   undoStack: [],          // [{ layerId, before }]  (ImageData of layer pre-stroke)
   redoStack: [],
@@ -118,8 +119,7 @@ PE.tools.marker = {
     panel.classList.add('visible');
     this._bindPanelEvents();
     this._renderLayerList();
-    this._setBrushMode(this.brushMode);
-    // Always start a new Marker session on the Pencil section.
+    // Always start a new Marker session on the Sketch Settings section.
     this.activeSection = 'pencil';
     this._setActiveSection(this.activeSection);
 
@@ -237,8 +237,8 @@ PE.tools.marker = {
 
   onKeydown(e) {
     if (e.ctrlKey || e.metaKey) return;
-    if (e.key === 'b' || e.key === 'B') this._setBrushMode('brush');
-    if (e.key === 'e' || e.key === 'E') this._setBrushMode('eraser');
+    if (e.key === 'b' || e.key === 'B') this._setActiveSection('brush');
+    if (e.key === 'e' || e.key === 'E') this._setActiveSection('eraser');
     if (e.key === '[') this._adjustBrushSize(-2);
     if (e.key === ']') this._adjustBrushSize(+2);
     if (e.key === 'n' || e.key === 'N') this._addNextPaletteLayer();
@@ -426,7 +426,7 @@ PE.tools.marker = {
     const s = PE.state;
     if (e.button !== 0) return;
     if (PE.zoom.spaceDown) return;
-    if (this.activeSection !== 'brush') return;
+    if (this.activeSection !== 'brush' && this.activeSection !== 'eraser') return;
     if (!s.imageData || !this.activeLayerId) return;
 
     const { x, y } = this._eventToImageCoord(e);
@@ -492,12 +492,14 @@ PE.tools.marker = {
   },
 
   _drawDab(layer, x, y, pressure) {
+    const isEraser = this.activeSection === 'eraser';
+    const baseSize = isEraser ? this.eraserSize : this.brushSize;
     const size = this.pressureEnabled
-      ? Math.max(1, this.brushSize * (0.25 + 0.75 * pressure))
-      : this.brushSize;
+      ? Math.max(1, baseSize * (0.25 + 0.75 * pressure))
+      : baseSize;
     const ctx = layer.ctx;
     ctx.save();
-    if (this.brushMode === 'eraser') {
+    if (isEraser) {
       ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = '#000';
     } else {
@@ -555,7 +557,7 @@ PE.tools.marker = {
     return `
       <div class="panel-section">
         <div class="panel-section-title selectable" id="mk-pencil-title">
-          <i class="fa-solid fa-pencil"></i> Pencil
+          <i class="fa-solid fa-pencil"></i> Sketch Settings
         </div>
         <div class="panel-row">
           <span class="panel-label">Tint</span>
@@ -580,23 +582,27 @@ PE.tools.marker = {
         <div class="panel-section-title selectable" id="mk-brush-title">
           <i class="fa-solid fa-paintbrush"></i> Brush
         </div>
-        <div class="panel-row mk-mode-row">
-          <button class="btn-panel mk-mode-btn" id="mk-mode-brush" data-mode="brush">
-            <i class="fa-solid fa-paintbrush"></i> Brush
-          </button>
-          <button class="btn-panel mk-mode-btn" id="mk-mode-eraser" data-mode="eraser">
-            <i class="fa-solid fa-eraser"></i> Eraser
-          </button>
-        </div>
         <div class="panel-row">
           <span class="panel-label">Size</span>
-          <input type="range" class="panel-slider" id="mk-size"
+          <input type="range" class="panel-slider" id="mk-brush-size"
                  min="1" max="120" value="${this.brushSize}">
-          <span class="panel-slider-value" id="mk-size-val">${this.brushSize}</span>
+          <span class="panel-slider-value" id="mk-brush-size-val">${this.brushSize}</span>
         </div>
         <div class="panel-row">
           <label class="panel-label" for="mk-pressure" style="cursor:pointer;">Pressure</label>
           <input type="checkbox" class="panel-checkbox" id="mk-pressure" ${this.pressureEnabled ? 'checked' : ''}>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-section-title selectable" id="mk-eraser-title">
+          <i class="fa-solid fa-eraser"></i> Eraser
+        </div>
+        <div class="panel-row">
+          <span class="panel-label">Size</span>
+          <input type="range" class="panel-slider" id="mk-eraser-size"
+                 min="1" max="120" value="${this.eraserSize}">
+          <span class="panel-slider-value" id="mk-eraser-size-val">${this.eraserSize}</span>
         </div>
       </div>
     `;
@@ -617,24 +623,35 @@ PE.tools.marker = {
     const newBtn = document.getElementById('mk-new-layer');
     if (newBtn) newBtn.addEventListener('click', () => this._addNextPaletteLayer());
 
-    const sizeEl = document.getElementById('mk-size');
-    const sizeVal = document.getElementById('mk-size-val');
-    if (sizeEl) {
-      sizeEl.addEventListener('input', (e) => {
+    const brushSizeEl = document.getElementById('mk-brush-size');
+    const brushSizeVal = document.getElementById('mk-brush-size-val');
+    if (brushSizeEl) {
+      brushSizeEl.addEventListener('input', (e) => {
         this.brushSize = parseInt(e.target.value, 10);
-        if (sizeVal) sizeVal.textContent = this.brushSize;
-        this._updateCursorSize();
+        if (brushSizeVal) brushSizeVal.textContent = this.brushSize;
+        if (this.activeSection === 'brush') this._updateCursorSize();
+      });
+    }
+
+    const eraserSizeEl = document.getElementById('mk-eraser-size');
+    const eraserSizeVal = document.getElementById('mk-eraser-size-val');
+    if (eraserSizeEl) {
+      eraserSizeEl.addEventListener('input', (e) => {
+        this.eraserSize = parseInt(e.target.value, 10);
+        if (eraserSizeVal) eraserSizeVal.textContent = this.eraserSize;
+        if (this.activeSection === 'eraser') this._updateCursorSize();
       });
     }
 
     const pressEl = document.getElementById('mk-pressure');
     if (pressEl) pressEl.addEventListener('change', (e) => { this.pressureEnabled = e.target.checked; });
 
-    document.querySelectorAll('.mk-mode-btn').forEach(btn => {
-      btn.addEventListener('click', () => this._setBrushMode(btn.dataset.mode));
-    });
-
-    const sectionMap = { pencil: 'mk-pencil-title', layers: 'mk-layers-title', brush: 'mk-brush-title' };
+    const sectionMap = {
+      pencil: 'mk-pencil-title',
+      layers: 'mk-layers-title',
+      brush:  'mk-brush-title',
+      eraser: 'mk-eraser-title',
+    };
     Object.entries(sectionMap).forEach(([name, id]) => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('click', () => this._setActiveSection(name));
@@ -644,11 +661,17 @@ PE.tools.marker = {
   /**
    * Switch which sub-section is active. Only the active section's controls
    * remain interactive (see `.panel-section.disabled` in CSS). Canvas
-   * painting is gated on the Brush section being active.
+   * painting is gated on the Brush or Eraser section being active — the
+   * section itself determines the stroke mode.
    */
   _setActiveSection(name) {
     this.activeSection = name;
-    const map = { pencil: 'mk-pencil-title', layers: 'mk-layers-title', brush: 'mk-brush-title' };
+    const map = {
+      pencil: 'mk-pencil-title',
+      layers: 'mk-layers-title',
+      brush:  'mk-brush-title',
+      eraser: 'mk-eraser-title',
+    };
     Object.entries(map).forEach(([key, id]) => {
       const title = document.getElementById(id);
       if (!title) return;
@@ -657,8 +680,9 @@ PE.tools.marker = {
       if (section) section.classList.toggle('disabled', key !== name);
     });
     const container = PE.dom.container;
-    if (name === 'brush') {
+    if (name === 'brush' || name === 'eraser') {
       container.classList.add('cursor-brush');
+      this._updateCursorSize();
       if (this._hovering) this._showCursor();
     } else {
       container.classList.remove('cursor-brush');
@@ -666,20 +690,20 @@ PE.tools.marker = {
     }
   },
 
-  _setBrushMode(mode) {
-    this.brushMode = mode;
-    document.querySelectorAll('.mk-mode-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.mode === mode);
-    });
-    this._updateCursorSize();
-  },
-
+  /**
+   * Adjust the size of whichever painting sub-tool is currently active.
+   * When the active section isn't a painting one, default to brush.
+   */
   _adjustBrushSize(delta) {
-    this.brushSize = Math.max(1, Math.min(120, this.brushSize + delta));
-    const sizeEl = document.getElementById('mk-size');
-    const sizeVal = document.getElementById('mk-size-val');
-    if (sizeEl) sizeEl.value = this.brushSize;
-    if (sizeVal) sizeVal.textContent = this.brushSize;
+    const isEraser = this.activeSection === 'eraser';
+    const key = isEraser ? 'eraserSize' : 'brushSize';
+    this[key] = Math.max(1, Math.min(120, this[key] + delta));
+    const sliderId = isEraser ? 'mk-eraser-size' : 'mk-brush-size';
+    const valId    = isEraser ? 'mk-eraser-size-val' : 'mk-brush-size-val';
+    const sizeEl = document.getElementById(sliderId);
+    const sizeVal = document.getElementById(valId);
+    if (sizeEl) sizeEl.value = this[key];
+    if (sizeVal) sizeVal.textContent = this[key];
     this._updateCursorSize();
   },
 
@@ -776,10 +800,12 @@ PE.tools.marker = {
 
   _updateCursorSize() {
     if (!this._cursorEl) return;
-    const size = Math.max(2, this.brushSize * PE.state.zoom);
+    const isEraser = this.activeSection === 'eraser';
+    const base = isEraser ? this.eraserSize : this.brushSize;
+    const size = Math.max(2, base * PE.state.zoom);
     this._cursorEl.style.width  = `${size}px`;
     this._cursorEl.style.height = `${size}px`;
-    this._cursorEl.classList.toggle('eraser', this.brushMode === 'eraser');
+    this._cursorEl.classList.toggle('eraser', isEraser);
   },
 
   _positionCursor(e) {
