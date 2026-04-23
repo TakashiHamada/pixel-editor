@@ -143,15 +143,11 @@ Then in `index.html` add `<script src="js/tools/my-tool.js"></script>` before `a
 
 ## UI Components
 
-Panel sections for tool UIs:
+Panel sections for tool UIs. When a tool has more than one section, each section is a mutually exclusive sub-tool: mark it with `data-section="<name>"` and let the shared helpers in `PE.panels` do the rest. Clicking (or pressing Enter / Space on) a disabled section activates it; descendant controls drop out of the tab order automatically.
 
 ```html
-<div class="panel-section">
-  <div class="panel-section-title">
-    <i class="fa-solid fa-icon"></i> Section Title
-  </div>
-  <!-- Clickable mode title: add class "selectable", toggles "active" -->
-  <div class="panel-section-title selectable active" id="my-mode">
+<div class="panel-section" data-section="my-mode">
+  <div class="panel-section-title selectable">
     <i class="fa-solid fa-icon"></i> Mode Name
   </div>
   <div class="panel-row">

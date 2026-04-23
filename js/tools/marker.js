@@ -130,7 +130,9 @@ PE.tools.marker = {
     this._onPointerUp   = (e) => this._handlePointerUp(e);
     this._onPointerEnter = () => {
       this._hovering = true;
-      if (this.activeSection === 'brush') this._showCursor();
+      if (this.activeSection === 'brush' || this.activeSection === 'eraser') {
+        this._showCursor();
+      }
     };
     this._onPointerLeave = () => {
       this._hovering = false;
