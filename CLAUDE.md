@@ -103,7 +103,7 @@ These preferences were established through iterative review sessions. Follow the
 - Pan mode uses `grab`/`grabbing`
 
 ### Panel Components
-- **Sliders**: value labels must not overflow — use `flex-shrink: 0` with enough `min-width`
+- **Sliders**: every tool uses the shared `.panel-slider` + `.panel-slider-value` pair in the same `.panel-row` (`<label> <slider flex:1> <value>`). Do NOT define per-tool slider widths or value widths — if a new value range needs more room, widen the shared `.panel-slider-value` in `css/style.css` so all tools stay visually aligned. The value cell must be wide enough for the widest value any tool can show (currently `-100` from Scanner) with `flex-shrink: 0` so the row can't squeeze the number
 - **Color previews**: keep small (20px), not oversized
 - **Spacing**: panels should feel **spacious, not cramped** — generous padding and row margins
 - **Compact action buttons**: important actions like "Make Transparent" use `btn-compact` (auto-width, centered with `margin: 0 auto`)

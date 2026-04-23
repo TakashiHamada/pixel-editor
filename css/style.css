@@ -322,12 +322,16 @@ body {
   border: 2px solid #ddd;
 }
 
+/* Shared across every tool's slider rows. Width must fit the widest value
+   any tool can show (currently "-100" from Scanner's signed adjusts), so
+   3-digit Marker sizes (up to 120) never overflow. Keep flex-shrink: 0
+   so the value cell never compresses when the slider fills the row. */
 .panel-slider-value {
   font-size: 11px;
   font-family: monospace;
   color: var(--text-primary);
-  width: 28px;
-  min-width: 28px;
+  width: 36px;
+  min-width: 36px;
   text-align: left;
   flex-shrink: 0;
   padding-left: 2px;
