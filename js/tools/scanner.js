@@ -62,7 +62,10 @@ PE.tools.scanner = {
     this._bindPanelEvents();
     this._setSelectMode(this.selectMode);
     // Force _setSubTool to treat this as a fresh entry (so Adjust re-snapshots
-    // baseData and pushes undo even when the saved subTool was already 'adjust').
+    // baseData and resets sliders even when the saved subTool was already
+    // 'adjust'). The Adjust-session undo snapshot is pushed lazily from
+    // _pushAdjustUndoOnce on the first control change (or eagerly on entry
+    // when grayscale is already enabled — see _setSubTool for the full flow).
     const initial = this.subTool || 'warp';
     this.subTool = null;
     this._setSubTool(initial);
@@ -73,8 +76,10 @@ PE.tools.scanner = {
     const panel = document.getElementById('left-panel');
     panel.classList.remove('visible');
     panel.innerHTML = '';
-    // Adjust changes are already committed to s.imageData live. The single
-    // undo entry pushed on entry to Adjust is enough to revert the session.
+    // Adjust changes are already committed to s.imageData live. The Adjust
+    // session's single undo entry (pushed lazily on the first control
+    // interaction, or eagerly on entry if grayscale mutates the image) is
+    // enough to revert the whole session on Ctrl+Z.
   },
 
   /**
