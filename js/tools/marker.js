@@ -51,6 +51,11 @@ PE.tools.marker = {
   brushMode: 'brush',     // 'brush' | 'eraser'
   pressureEnabled: true,
 
+  // Which section ("sub-tool") is currently focused. Mirrors the mode-group
+  // pattern used by Transparency and Scanner: only the active section's
+  // controls are interactive, canvas painting only works while 'brush'.
+  activeSection: 'pencil', // 'pencil' | 'layers' | 'brush'
+
   undoStack: [],          // [{ layerId, before }]  (ImageData of layer pre-stroke)
   redoStack: [],
   MAX_UNDO: 30,
@@ -70,8 +75,9 @@ PE.tools.marker = {
   _onPointerLeave: null,
   _onZoomChange: null,
 
-  // Brush cursor preview (DOM circle)
+  // Brush cursor preview (DOM circle) and hover tracking
   _cursorEl: null,
+  _hovering: false,
 
   // Default palette cycled when creating new layers
   _palette: ['#E85D5D', '#F2B84B', '#69B56A', '#4A8FD9', '#9b59b6', '#8b5a2b'],
@@ -113,15 +119,23 @@ PE.tools.marker = {
     this._bindPanelEvents();
     this._renderLayerList();
     this._setBrushMode(this.brushMode);
+    // Always start a new Marker session on the Pencil section.
+    this.activeSection = 'pencil';
+    this._setActiveSection(this.activeSection);
 
     // Attach pointer listeners on the canvas container
     const container = PE.dom.container;
-    container.classList.add('cursor-brush');
     this._onPointerDown = (e) => this._handlePointerDown(e);
     this._onPointerMove = (e) => this._handlePointerMove(e);
     this._onPointerUp   = (e) => this._handlePointerUp(e);
-    this._onPointerEnter = () => this._showCursor();
-    this._onPointerLeave = () => this._hideCursor();
+    this._onPointerEnter = () => {
+      this._hovering = true;
+      if (this.activeSection === 'brush') this._showCursor();
+    };
+    this._onPointerLeave = () => {
+      this._hovering = false;
+      this._hideCursor();
+    };
     container.addEventListener('pointerdown', this._onPointerDown);
     window.addEventListener('pointermove', this._onPointerMove);
     window.addEventListener('pointerup',   this._onPointerUp);
@@ -386,6 +400,7 @@ PE.tools.marker = {
     const s = PE.state;
     if (e.button !== 0) return;
     if (PE.zoom.spaceDown) return;
+    if (this.activeSection !== 'brush') return;
     if (!s.imageData || !this.activeLayerId) return;
 
     const { x, y } = this._eventToImageCoord(e);
@@ -513,7 +528,7 @@ PE.tools.marker = {
   _buildPanelHTML() {
     return `
       <div class="panel-section">
-        <div class="panel-section-title">
+        <div class="panel-section-title selectable" id="mk-pencil-title">
           <i class="fa-solid fa-pencil"></i> Pencil
         </div>
         <div class="panel-row">
@@ -524,7 +539,7 @@ PE.tools.marker = {
       </div>
 
       <div class="panel-section">
-        <div class="panel-section-title">
+        <div class="panel-section-title selectable" id="mk-layers-title">
           <i class="fa-solid fa-layer-group"></i> Layers
         </div>
         <div class="layer-list" id="mk-layer-list"></div>
@@ -536,7 +551,7 @@ PE.tools.marker = {
       </div>
 
       <div class="panel-section">
-        <div class="panel-section-title">
+        <div class="panel-section-title selectable" id="mk-brush-title">
           <i class="fa-solid fa-paintbrush"></i> Brush
         </div>
         <div class="panel-row mk-mode-row">
@@ -592,6 +607,37 @@ PE.tools.marker = {
     document.querySelectorAll('.mk-mode-btn').forEach(btn => {
       btn.addEventListener('click', () => this._setBrushMode(btn.dataset.mode));
     });
+
+    const sectionMap = { pencil: 'mk-pencil-title', layers: 'mk-layers-title', brush: 'mk-brush-title' };
+    Object.entries(sectionMap).forEach(([name, id]) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('click', () => this._setActiveSection(name));
+    });
+  },
+
+  /**
+   * Switch which sub-section is active. Only the active section's controls
+   * remain interactive (see `.panel-section.disabled` in CSS). Canvas
+   * painting is gated on the Brush section being active.
+   */
+  _setActiveSection(name) {
+    this.activeSection = name;
+    const map = { pencil: 'mk-pencil-title', layers: 'mk-layers-title', brush: 'mk-brush-title' };
+    Object.entries(map).forEach(([key, id]) => {
+      const title = document.getElementById(id);
+      if (!title) return;
+      title.classList.toggle('active', key === name);
+      const section = title.closest('.panel-section');
+      if (section) section.classList.toggle('disabled', key !== name);
+    });
+    const container = PE.dom.container;
+    if (name === 'brush') {
+      container.classList.add('cursor-brush');
+      if (this._hovering) this._showCursor();
+    } else {
+      container.classList.remove('cursor-brush');
+      this._hideCursor();
+    }
   },
 
   _setBrushMode(mode) {
