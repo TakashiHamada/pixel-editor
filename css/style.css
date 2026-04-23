@@ -901,9 +901,13 @@ body {
 
 .layer-spacer { flex: 1; }
 
-/* --- Marker: brush mode buttons (side-by-side) --- */
+/* --- Side-by-side button row (e.g. Scanner Apply/Reset, mode toggles) --- */
 .mk-mode-row {
   gap: 6px;
+}
+/* Buttons in a side-by-side row share the width equally. */
+.mk-mode-row > .btn-panel {
+  flex: 1;
 }
 
 .mk-mode-btn {

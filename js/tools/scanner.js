@@ -117,14 +117,12 @@ PE.tools.scanner = {
         <div class="panel-hint" id="scan-warp-hint">
           Drag the four red corners to the edges of the document.
         </div>
-        <div class="panel-row">
-          <button class="btn-panel" id="scan-reset-corners">
-            <i class="fa-solid fa-rotate-left"></i> Reset Corners
-          </button>
-        </div>
-        <div class="panel-row">
-          <button class="btn-panel btn-action btn-compact" id="scan-apply-warp">
+        <div class="panel-row mk-mode-row">
+          <button class="btn-panel btn-action" id="scan-apply-warp">
             <i class="fa-solid fa-check"></i> <span id="scan-apply-label">Apply Warp</span>
+          </button>
+          <button class="btn-panel" id="scan-reset-corners">
+            <i class="fa-solid fa-rotate-left"></i> Reset
           </button>
         </div>
       </div>
