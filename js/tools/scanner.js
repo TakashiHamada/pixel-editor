@@ -121,8 +121,8 @@ PE.tools.scanner = {
           <button class="btn-panel btn-action" id="scan-apply-warp">
             <i class="fa-solid fa-check"></i> <span id="scan-apply-label">Apply Warp</span>
           </button>
-          <button class="btn-panel" id="scan-reset-corners">
-            <i class="fa-solid fa-rotate-left"></i> Reset
+          <button class="btn-panel btn-icon" id="scan-reset-corners" title="Reset corners">
+            <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
       </div>

@@ -905,9 +905,16 @@ body {
 .mk-mode-row {
   gap: 6px;
 }
-/* Buttons in a side-by-side row share the width equally. */
+/* Buttons in a side-by-side row share the width equally by default. */
 .mk-mode-row > .btn-panel {
   flex: 1;
+}
+/* Icon-only button: fixed narrow square, does not flex-grow. Place after
+   the sibling rule above so source-order beats its equal specificity. */
+.btn-panel.btn-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  padding: 9px 0;
 }
 
 .mk-mode-btn {
