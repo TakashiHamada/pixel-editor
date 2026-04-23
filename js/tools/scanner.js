@@ -213,7 +213,7 @@ PE.tools.scanner = {
     }
   },
 
-  _setSubTool(name, opts) {
+  _setSubTool(name) {
     const prev = this.subTool;
     this.subTool = name;
     PE.panels.setActiveSection(name);
@@ -226,22 +226,26 @@ PE.tools.scanner = {
       this._showHandles();
     } else {
       this._hideHandles();
-      // Entering Adjust from somewhere else: snapshot pre-Adjust state and
-      // reset sliders. The undo entry is deferred until the first real user
-      // interaction (via _pushAdjustUndoOnce) so merely tabbing through Adjust
-      // without touching a control doesn't leave a no-op Ctrl+Z on the stack.
-      // `opts.skipUndo` marks the session as already-pushed: _applyWarp's
-      // auto-advance inherits the pre-warp snapshot it pushed moments earlier.
+      // Entering Adjust from somewhere else: snapshot the pre-Adjust state and
+      // reset sliders. The undo entry is deferred to the first real user
+      // interaction (see _pushAdjustUndoOnce) so tabbing through Adjust
+      // without touching a control leaves no no-op Ctrl+Z on the stack.
+      // Exception: entry also triggers _renderPreview, which silently commits
+      // grayscale when it's enabled. If that first render will actually
+      // mutate the image, push undo eagerly so the mutation is reversible.
       if (PE.state.imageData && prev !== 'adjust') {
         this._snapshotBase();
-        this._adjustUndoPushed = !!(opts && opts.skipUndo);
+        this._adjustUndoPushed = false;
         this.brightness = 0;
         this.contrast = 0;
         const bEl = document.getElementById('scan-brightness');
         const cEl = document.getElementById('scan-contrast');
         if (bEl) { bEl.value = 0; document.getElementById('scan-brightness-val').textContent = '0'; }
         if (cEl) { cEl.value = 0; document.getElementById('scan-contrast-val').textContent = '0'; }
-        // Apply grayscale immediately if enabled.
+        // With brightness=0 and contrast=0, _renderPreview is an identity
+        // transform unless grayscale is on. Push undo before the mutation in
+        // that case; otherwise leave the snapshot for the first user action.
+        if (this.grayscale) this._pushAdjustUndoOnce();
         this._renderPreview();
       }
     }
@@ -475,10 +479,11 @@ PE.tools.scanner = {
     const verb = this.selectMode === 'rectangle' ? 'Crop' : 'Warp';
     PE.log.success(`${verb} applied — switched to Adjust`);
     // Automatically move on to Adjust mode once the region is confirmed, and
-    // flash the first Adjust row so the user sees the panel change. Suppress
-    // the Adjust-entry undo push — _applyWarp already pushed the pre-warp
-    // snapshot, so a second entry here would make Ctrl+Z appear to do nothing.
-    this._setSubTool('adjust', { skipUndo: true });
+    // flash the first Adjust row so the user sees the panel change. Adjust
+    // manages its own lazy undo snapshot from the post-warp image, so Ctrl+Z
+    // can revert an Adjust session first and the Warp on the next undo —
+    // with no no-op entry if the user never touches the controls.
+    this._setSubTool('adjust');
     const firstRow = document.querySelector(
       '#left-panel .panel-section[data-section="adjust"] .panel-row'
     );
