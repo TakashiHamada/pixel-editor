@@ -39,6 +39,15 @@ PE.activateTool = function(toolId) {
   // Deactivate current tool
   if (current) current.deactivate();
 
+  // Strip every tool-cursor class from the canvas container so no class from
+  // the previous tool can leak into the next one. Tools re-add whichever
+  // class they need inside activate() / _setSubTool().
+  if (PE.dom.container) {
+    const cursorClasses = Array.from(PE.dom.container.classList)
+      .filter(c => c.startsWith('cursor-'));
+    if (cursorClasses.length) PE.dom.container.classList.remove(...cursorClasses);
+  }
+
   // Update menu bar buttons
   document.querySelectorAll('.btn-tool').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.toolId === toolId);

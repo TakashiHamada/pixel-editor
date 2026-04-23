@@ -206,10 +206,13 @@ PE.panels = {
       el.addEventListener('click', activate);
       // Keyboard parity: Tab onto a disabled section (role=button, tabindex=0
       // managed by the tool when toggling .disabled) and press Enter/Space.
+      // Stop propagation so Space doesn't also trigger PE.zoom's global
+      // Space-to-pan handler.
       el.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         if (!el.classList.contains('disabled')) return;
         e.preventDefault();
+        e.stopPropagation();
         activate();
       });
     });

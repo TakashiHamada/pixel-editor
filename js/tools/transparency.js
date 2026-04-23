@@ -182,7 +182,11 @@ PE.tools.transparency = {
     this.subTool = name;
     const container = PE.dom.container;
     container.classList.remove('cursor-crosshair', 'cursor-eyedropper');
-    container.classList.add(name === 'eyedropper' ? 'cursor-eyedropper' : 'cursor-crosshair');
+    // Preview mode (no image) leaves the native cursor alone — the locked
+    // panel makes the canvas inert, so there's no tool cursor to show yet.
+    if (PE.state.imageData) {
+      container.classList.add(name === 'eyedropper' ? 'cursor-eyedropper' : 'cursor-crosshair');
+    }
     PE.panels.setActiveSection(name);
   },
 

@@ -166,6 +166,7 @@ PE.tools.scanner = {
     document.getElementById('scan-apply-warp').addEventListener('click', () => this._applyWarp());
 
     document.getElementById('scan-grayscale').addEventListener('change', (e) => {
+      this._pushAdjustUndoOnce();
       this.grayscale = e.target.checked;
       this._renderPreview();
     });
@@ -173,6 +174,7 @@ PE.tools.scanner = {
       const slider = document.getElementById(id);
       const val = document.getElementById(`${id}-val`);
       slider.addEventListener('input', (e) => {
+        this._pushAdjustUndoOnce();
         this[key] = parseInt(e.target.value, 10);
         val.textContent = this[key];
         this._renderPreview();
@@ -224,13 +226,15 @@ PE.tools.scanner = {
       this._showHandles();
     } else {
       this._hideHandles();
-      // Entering Adjust from somewhere else: snapshot pre-Adjust state to undo
-      // (one entry per session covers every slider move) and reset sliders.
-      // `opts.skipUndo` lets _applyWarp's auto-advance skip the push since it
-      // already snapshotted the pre-warp state moments earlier.
+      // Entering Adjust from somewhere else: snapshot pre-Adjust state and
+      // reset sliders. The undo entry is deferred until the first real user
+      // interaction (via _pushAdjustUndoOnce) so merely tabbing through Adjust
+      // without touching a control doesn't leave a no-op Ctrl+Z on the stack.
+      // `opts.skipUndo` marks the session as already-pushed: _applyWarp's
+      // auto-advance inherits the pre-warp snapshot it pushed moments earlier.
       if (PE.state.imageData && prev !== 'adjust') {
-        if (!opts || !opts.skipUndo) PE.history.pushUndo();
         this._snapshotBase();
+        this._adjustUndoPushed = !!(opts && opts.skipUndo);
         this.brightness = 0;
         this.contrast = 0;
         const bEl = document.getElementById('scan-brightness');
@@ -534,6 +538,30 @@ PE.tools.scanner = {
       new Uint8ClampedArray(s.imageData.data),
       s.imgWidth, s.imgHeight
     );
+  },
+
+  /**
+   * Lazy undo snapshot for the current Adjust session. Pushes baseData (the
+   * pristine pre-adjust state captured on section entry) onto the global
+   * undo stack the first time the user touches a control in this session.
+   * Subsequent changes in the same session are no-ops. `_adjustUndoPushed`
+   * is reset to false on entering Adjust, and pre-set to true when entering
+   * via _applyWarp's auto-advance (which already pushed pre-warp to undo).
+   */
+  _pushAdjustUndoOnce() {
+    if (this._adjustUndoPushed) return;
+    const s = PE.state;
+    if (!s.imageData || !this.baseData) return;
+    const snap = new ImageData(
+      new Uint8ClampedArray(this.baseData.data),
+      s.imgWidth, s.imgHeight
+    );
+    s.undoStack.push(snap);
+    const cap = (typeof PE.MAX_UNDO === 'number') ? PE.MAX_UNDO : 20;
+    if (s.undoStack.length > cap) s.undoStack.shift();
+    s.redoStack = [];
+    PE.history.updateUI();
+    this._adjustUndoPushed = true;
   },
 
   _renderPreview() {
