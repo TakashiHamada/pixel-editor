@@ -199,10 +199,45 @@ PE.panels = {
    */
   wireSubSections(setter) {
     document.querySelectorAll('#left-panel .panel-section[data-section]').forEach(el => {
-      el.addEventListener('click', () => {
+      const activate = () => {
         if (!el.classList.contains('disabled')) return;
         setter(el.dataset.section);
+      };
+      el.addEventListener('click', activate);
+      // Keyboard parity: Tab onto a disabled section (role=button, tabindex=0
+      // managed by the tool when toggling .disabled) and press Enter/Space.
+      el.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        if (!el.classList.contains('disabled')) return;
+        e.preventDefault();
+        activate();
       });
+    });
+  },
+
+  /**
+   * Toggle the `.disabled` class on every registered sub-section so only the
+   * named one is active, and manage tabindex/role/aria so disabled sections
+   * are keyboard-reachable "activate me" targets while the active one is
+   * removed from the tab order. Tools call this from their section setter
+   * after running the tool-specific activation work.
+   */
+  setActiveSection(activeName) {
+    document.querySelectorAll('#left-panel .panel-section[data-section]').forEach(el => {
+      const isActive = el.dataset.section === activeName;
+      el.classList.toggle('disabled', !isActive);
+      if (isActive) {
+        el.removeAttribute('role');
+        el.removeAttribute('tabindex');
+        el.removeAttribute('aria-label');
+      } else {
+        el.setAttribute('role', 'button');
+        el.setAttribute('tabindex', '0');
+        const title = el.querySelector('.panel-section-title');
+        if (title) el.setAttribute('aria-label', `Activate ${title.textContent.trim()}`);
+      }
+      const title = el.querySelector('.panel-section-title');
+      if (title) title.classList.toggle('active', isActive);
     });
   },
 };

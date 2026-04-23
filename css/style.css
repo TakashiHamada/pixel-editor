@@ -106,6 +106,16 @@ body {
   cursor: default;
 }
 
+/* Keyboard focus ring for interactive controls. Mouse clicks never trigger
+   :focus-visible, so this only appears when the user tabs to something. */
+.btn:focus-visible,
+.btn-panel:focus-visible,
+.panel-slider:focus-visible,
+.panel-section.disabled:focus-visible {
+  outline: 2px solid var(--accent-active);
+  outline-offset: 1px;
+}
+
 .btn i {
   font-size: 13px;
   width: 14px;
@@ -155,13 +165,6 @@ body {
   height: 20px;
   background: var(--border-color);
   margin: 0 4px;
-}
-
-/* Commit time display */
-#commit-time {
-  font-size: 11px;
-  color: var(--text-secondary);
-  font-family: monospace;
 }
 
 /* --- Main Content Area (panel + canvas) --- */
@@ -286,8 +289,10 @@ body {
   margin-bottom: 0;
 }
 
+/* macOS-style double blink: snap on/off twice, no fade. `steps(1, end)`
+   makes each segment a single hold — no gradient between keyframes. */
 .panel-row.flash {
-  animation: row-flash 0.25s ease-out;
+  animation: row-flash 0.25s steps(1, end);
 }
 
 @keyframes row-flash {
@@ -324,7 +329,8 @@ body {
   border-radius: 50%;
   background: var(--accent-active);
   cursor: pointer;
-  border: 2px solid #ddd;
+  border: 1px solid var(--bg-dark);
+  box-shadow: 0 0 0 1px var(--accent-active);
 }
 
 .panel-slider::-moz-range-thumb {
@@ -333,7 +339,8 @@ body {
   border-radius: 50%;
   background: var(--accent-active);
   cursor: pointer;
-  border: 2px solid #ddd;
+  border: 1px solid var(--bg-dark);
+  box-shadow: 0 0 0 1px var(--accent-active);
 }
 
 /* Shared across every tool's slider rows. Width must fit the widest value
@@ -915,18 +922,6 @@ body {
   flex: 0 0 auto;
   width: 40px;
   padding: 9px 0;
-}
-
-.mk-mode-btn {
-  flex: 1;
-  padding: 7px 6px;
-  font-size: 11px;
-}
-
-.mk-mode-btn.active {
-  background: var(--accent);
-  border-color: var(--accent-active);
-  color: #fff;
 }
 
 /* --- Scanner: selection mode buttons (reuse mk-mode-row layout) --- */

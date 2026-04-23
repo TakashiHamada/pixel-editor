@@ -60,11 +60,9 @@ PE.tools.scanner = {
     panel.innerHTML = this._buildPanelHTML();
     panel.classList.add('visible');
     this._bindPanelEvents();
-    // Seed baseData from current image so Adjust has something to preview from.
-    if (PE.state.imageData) this._snapshotBase();
     this._setSelectMode(this.selectMode);
     // Force _setSubTool to treat this as a fresh entry (so Adjust re-snapshots
-    // and pushes undo even when the saved subTool was already 'adjust').
+    // baseData and pushes undo even when the saved subTool was already 'adjust').
     const initial = this.subTool || 'warp';
     this.subTool = null;
     this._setSubTool(initial);
@@ -87,6 +85,10 @@ PE.tools.scanner = {
     this._hideHandles();
     this.corners = null;
     this.baseData = null;
+    // If the user opens a fresh image while Scanner is still active, the next
+    // _setSubTool('adjust') needs to re-snapshot baseData from the new image.
+    // Clearing subTool here forces the `prev !== 'adjust'` branch to run.
+    this.subTool = null;
   },
 
   onKeydown(e) {
@@ -114,15 +116,14 @@ PE.tools.scanner = {
             <i class="fa-solid fa-vector-square"></i> Rectangle
           </button>
         </div>
-        <div class="panel-hint" id="scan-warp-hint">
-          Drag the four red corners to the edges of the document.
-        </div>
+        <div class="panel-hint" id="scan-warp-hint"></div>
         <div class="panel-row mk-mode-row">
           <button class="btn-panel btn-action" id="scan-apply-warp">
             <i class="fa-solid fa-check"></i> <span id="scan-apply-label">Apply Warp</span>
           </button>
-          <button class="btn-panel btn-icon" id="scan-reset-corners" title="Reset corners">
-            <i class="fa-solid fa-xmark"></i>
+          <button class="btn-panel btn-icon" id="scan-reset-corners"
+                  title="Reset corners" aria-label="Reset corners">
+            <i class="fa-solid fa-rotate-left"></i>
           </button>
         </div>
       </div>
@@ -131,6 +132,7 @@ PE.tools.scanner = {
         <div class="panel-section-title selectable" id="scan-adjust-title">
           <i class="fa-solid fa-sliders"></i> Adjust
         </div>
+        <div class="panel-hint">Changes apply live as you slide.</div>
         <div class="panel-row">
           <label class="panel-label" for="scan-grayscale" style="cursor:pointer;">Grayscale</label>
           <input type="checkbox" class="panel-checkbox" id="scan-grayscale" ${this.grayscale ? 'checked' : ''}>
@@ -211,16 +213,7 @@ PE.tools.scanner = {
   _setSubTool(name) {
     const prev = this.subTool;
     this.subTool = name;
-    const warpTitle = document.getElementById('scan-warp-title');
-    const adjTitle = document.getElementById('scan-adjust-title');
-    if (warpTitle) warpTitle.classList.toggle('active', name === 'warp');
-    if (adjTitle) adjTitle.classList.toggle('active', name === 'adjust');
-
-    // Disable the inactive section's body. See CLAUDE.md - "Sub-tool section disable pattern".
-    const warpSec = warpTitle && warpTitle.closest('.panel-section');
-    const adjSec = adjTitle && adjTitle.closest('.panel-section');
-    if (warpSec) warpSec.classList.toggle('disabled', name !== 'warp');
-    if (adjSec) adjSec.classList.toggle('disabled', name !== 'adjust');
+    PE.panels.setActiveSection(name);
 
     const container = PE.dom.container;
     container.classList.remove('cursor-crosshair');
@@ -307,6 +300,9 @@ PE.tools.scanner = {
       this._transformHook = null;
     }
     this._detachDragListeners();
+    // Drop stale drag index so a buffered pointer event after teardown can't
+    // mutate corners that no longer have a visible handle.
+    this._dragging = -1;
   },
 
   _repositionHandles() {
@@ -470,9 +466,18 @@ PE.tools.scanner = {
     PE.file._updateImageInfo();
     this._resetCorners();
     const verb = this.selectMode === 'rectangle' ? 'Crop' : 'Warp';
-    PE.log.success(`${verb} applied (${outW} x ${outH})`);
-    // Automatically move on to Adjust mode once the region is confirmed.
+    PE.log.success(`${verb} applied — switched to Adjust`);
+    // Automatically move on to Adjust mode once the region is confirmed, and
+    // flash the first Adjust row so the user sees the panel change.
     this._setSubTool('adjust');
+    const firstRow = document.querySelector(
+      '#left-panel .panel-section[data-section="adjust"] .panel-row'
+    );
+    if (firstRow) {
+      firstRow.classList.remove('flash');
+      void firstRow.offsetWidth; // restart animation
+      firstRow.classList.add('flash');
+    }
   },
 
   /**

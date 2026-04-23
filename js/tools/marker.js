@@ -175,6 +175,12 @@ PE.tools.marker = {
     const container = PE.dom.container;
     container.classList.remove('cursor-brush');
 
+    // If the user switched tools mid-stroke, drop the partial-stroke state so
+    // it doesn't fire spuriously on next activation. The dab already drawn on
+    // the layer canvas will be baked into s.imageData by the composite below.
+    this._drawing = false;
+    this._strokeBefore = null;
+
     if (this._onPointerDown) container.removeEventListener('pointerdown', this._onPointerDown);
     if (this._onPointerMove) window.removeEventListener('pointermove', this._onPointerMove);
     if (this._onPointerUp)   window.removeEventListener('pointerup',   this._onPointerUp);
@@ -216,6 +222,9 @@ PE.tools.marker = {
     this.pencilRender = null;
     this.undoStack = [];
     this.redoStack = [];
+    // Restore the global undo counter so the status bar doesn't keep showing
+    // Marker's stroke counts after we hand control back.
+    PE.history.updateUI();
   },
 
   onCanvasClick() { /* pointer events do the work */ },
@@ -658,19 +667,7 @@ PE.tools.marker = {
    */
   _setActiveSection(name) {
     this.activeSection = name;
-    const map = {
-      pencil: 'mk-pencil-title',
-      layers: 'mk-layers-title',
-      brush:  'mk-brush-title',
-      eraser: 'mk-eraser-title',
-    };
-    Object.entries(map).forEach(([key, id]) => {
-      const title = document.getElementById(id);
-      if (!title) return;
-      title.classList.toggle('active', key === name);
-      const section = title.closest('.panel-section');
-      if (section) section.classList.toggle('disabled', key !== name);
-    });
+    PE.panels.setActiveSection(name);
     const container = PE.dom.container;
     if (name === 'brush' || name === 'eraser') {
       container.classList.add('cursor-brush');

@@ -16,15 +16,15 @@ Or simply open `index.html` directly in a browser.
 ## Features
 
 ### Common
-- **Open / Download / Close** — load images (file dialog or drag & drop), export as PNG
-- **Undo / Redo** — up to 20 levels (`Ctrl+Z` / `Ctrl+Shift+Z`)
+- **Open / Download / Close** — load images (file dialog or drag & drop); export format is chosen by the active tool (PNG by default, JPEG for Scanner / Marker)
+- **Undo / Redo** — up to 20 levels globally (`Ctrl+Z` / `Ctrl+Shift+Z`). Marker overrides this while active with its own 30-deep per-stroke stack
 - **Zoom** — mouse wheel or `Ctrl+=`/`Ctrl+-`, fit to view with `0`
 - **Pan** — `Space + Drag` or middle mouse button
 - **Keyboard Shortcuts** — press `?` to view all (two-column modal: common + active tool)
 - **Status Bar** — image info, log (click to copy), cursor position, zoom level, undo count
 
 ### Transparency Tool
-Remove background colors from sprites and game assets:
+Remove background colors from sprites and game assets (PNG export):
 
 1. **Extract Background Color** (`E`) — click to pick the background color. Live preview as you hover.
 2. **Select Region** (`S`) — flood-fill select. Hold `Shift` to add to selection.
@@ -33,6 +33,20 @@ Remove background colors from sprites and game assets:
 Parameters:
 - **Tolerance** (1–100): color similarity threshold for selection
 - **Border** (0–10): feathered edge expansion for smooth transitions
+
+### Scanner Tool
+Clean up photographed or scanned pencil sketches (JPEG export):
+
+1. **Crop Region** — drag the four red corner handles to the true corners of the page (Perspective mode) or snap them to an axis-aligned rectangle (Rectangle mode). **Apply Warp** / **Apply Crop** rectifies the selection; **Reset** puts the corners back at the image bounds.
+2. **Adjust** — live Grayscale toggle, Brightness (−100..100), Contrast (−100..100). Changes apply as you slide; one undo entry per Adjust session reverts the whole pass.
+
+### Marker Tool
+Paint a photographed pencil sketch with translucent markers (JPEG export). The pencil layer is tintable; each color lives on its own layer composited via multiply.
+
+1. **Sketch Settings** — pick a tint for the pencil layer (black → tint, white → white).
+2. **Layers** — add / recolor / reorder color layers; per-layer opacity + visibility.
+3. **Brush** — paint the active layer. Size slider + pen-pressure toggle.
+4. **Eraser** — remove paint from the active layer. Its own size slider, separate from Brush.
 
 ## Architecture
 
@@ -50,7 +64,9 @@ pixel-editor/
 │   │   ├── zoom.js            # Zoom, pan, cursor tracking
 │   │   └── ui.js              # Log, loading, shortcuts modal, selection overlay
 │   └── tools/
-│       └── transparency.js    # Transparency removal tool
+│       ├── transparency.js    # Background removal tool
+│       ├── scanner.js         # Perspective rectify + live Adjust
+│       └── marker.js          # Translucent marker painting over a sketch
 ├── img/
 │   └── favicon.svg            # Pixel grid + crosshair favicon
 ├── CLAUDE.md                  # AI development guide & UI preferences
@@ -74,6 +90,7 @@ All code lives under `window.PE`:
 | `PE.overlay` | Selection overlay animation |
 | `PE.loading` | Loading spinner |
 | `PE.shortcuts` | Shortcuts modal |
+| `PE.panels` | Shared panel helpers (`wireSubSections`, `setActiveSection`) |
 | `PE.tools.*` | Tool implementations |
 | `PE.toolRegistry` | Registered tools map |
 | `PE.registerTool(tool)` | Register a new tool |
@@ -179,12 +196,19 @@ PE.dom.mainCtx.putImageData(s.imageData, 0, 0);
 | `0` | Fit to view |
 | `Space+Drag` | Pan |
 | `?` | Show shortcuts |
-| `E` | Eyedropper mode * |
-| `S` | Select mode * |
-| `Shift+Click` | Add to selection * |
-| `Delete` | Make transparent * |
+| `E` | Eyedropper mode † |
+| `S` | Select mode † |
+| `Shift+Click` | Add to selection † |
+| `Delete` | Make transparent † |
+| `P` | Perspective / Crop mode ‡ |
+| `A` | Adjust mode ‡ |
+| `R` | Reset corners ‡ |
+| `B` | Brush § |
+| `E` | Eraser § |
+| `[` / `]` | Brush/Eraser size − / + § |
+| `N` | New color layer § |
 
-\* Tool-specific (Transparency tool)
+\† Transparency tool only  \‡ Scanner tool only  \§ Marker tool only (tool-scoped — each tool owns its single-letter keys)
 
 ## Theme
 

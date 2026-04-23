@@ -181,26 +181,8 @@ PE.tools.transparency = {
     this.subTool = name;
     const container = PE.dom.container;
     container.classList.remove('cursor-crosshair', 'cursor-eyedropper');
-
-    const eyeTitle = document.getElementById('tool-eyedropper');
-    const selTitle = document.getElementById('tool-select');
-
-    if (name === 'eyedropper') {
-      container.classList.add('cursor-eyedropper');
-      if (eyeTitle) eyeTitle.classList.add('active');
-      if (selTitle) selTitle.classList.remove('active');
-    } else {
-      container.classList.add('cursor-crosshair');
-      if (selTitle) selTitle.classList.add('active');
-      if (eyeTitle) eyeTitle.classList.remove('active');
-    }
-
-    // Disable the inactive section's body (sliders / buttons) while keeping
-    // its title clickable. See CLAUDE.md - "Sub-tool section disable pattern".
-    const eyeSec = eyeTitle && eyeTitle.closest('.panel-section');
-    const selSec = selTitle && selTitle.closest('.panel-section');
-    if (eyeSec) eyeSec.classList.toggle('disabled', name !== 'eyedropper');
-    if (selSec) selSec.classList.toggle('disabled', name !== 'select');
+    container.classList.add(name === 'eyedropper' ? 'cursor-eyedropper' : 'cursor-crosshair');
+    PE.panels.setActiveSection(name);
   },
 
   _updateColorDisplay() {
