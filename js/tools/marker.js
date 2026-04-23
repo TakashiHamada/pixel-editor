@@ -190,9 +190,20 @@ PE.tools.marker = {
     }
     this._destroyCursor();
 
-    // Bake composite back into imageData so other tools see the painted result.
+    // If the user actually painted, commit the composite so downstream tools
+    // see the painted result. If no strokes were made, Marker's pencil tint
+    // would have silently stripped the original colors; restore the original
+    // image we captured on activate so switching to another tool is lossless.
     if (s.imageData && this.pencilSource) {
-      s.imageData = PE.dom.mainCtx.getImageData(0, 0, s.imgWidth, s.imgHeight);
+      if (this.undoStack.length > 0) {
+        s.imageData = PE.dom.mainCtx.getImageData(0, 0, s.imgWidth, s.imgHeight);
+      } else {
+        s.imageData = this.pencilSource;
+        PE.dom.mainCtx.putImageData(this.pencilSource, 0, 0);
+        // Drop the pushUndo we added in activate — no user action happened.
+        if (s.undoStack.length) s.undoStack.pop();
+        PE.history.updateUI();
+      }
     }
 
     const panel = document.getElementById('left-panel');
