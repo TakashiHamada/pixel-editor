@@ -119,7 +119,7 @@ PE.tools.transparency = {
   // ---- Panel HTML ----
   _buildPanelHTML() {
     return `
-      <div class="panel-section">
+      <div class="panel-section" data-section="eyedropper">
         <div class="panel-section-title selectable" id="tool-eyedropper">
           <i class="fa-solid fa-eye-dropper"></i> Extract Background Color
         </div>
@@ -130,7 +130,7 @@ PE.tools.transparency = {
         </div>
       </div>
 
-      <div class="panel-section">
+      <div class="panel-section" data-section="select">
         <div class="panel-section-title selectable" id="tool-select">
           <i class="fa-solid fa-vector-square"></i> Select Region
         </div>
@@ -158,13 +158,8 @@ PE.tools.transparency = {
   _bindPanelEvents() {
     const self = this;
 
-    // Sub-tool buttons
-    document.getElementById('tool-eyedropper').addEventListener('click', () => {
-      self._setSubTool('eyedropper');
-    });
-    document.getElementById('tool-select').addEventListener('click', () => {
-      self._setSubTool('select');
-    });
+    // Sub-tool sections: clicking anywhere in a disabled section activates it.
+    PE.panels.wireSubSections((name) => self._setSubTool(name));
 
     // Sliders
     document.getElementById('tool-tolerance').addEventListener('input', (e) => {

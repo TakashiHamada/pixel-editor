@@ -555,7 +555,7 @@ PE.tools.marker = {
   // ---------------------------------------------------------------
   _buildPanelHTML() {
     return `
-      <div class="panel-section">
+      <div class="panel-section" data-section="pencil">
         <div class="panel-section-title selectable" id="mk-pencil-title">
           <i class="fa-solid fa-pencil"></i> Sketch Settings
         </div>
@@ -566,7 +566,7 @@ PE.tools.marker = {
         </div>
       </div>
 
-      <div class="panel-section">
+      <div class="panel-section" data-section="layers">
         <div class="panel-section-title selectable" id="mk-layers-title">
           <i class="fa-solid fa-layer-group"></i> Layers
         </div>
@@ -578,7 +578,7 @@ PE.tools.marker = {
         </div>
       </div>
 
-      <div class="panel-section">
+      <div class="panel-section" data-section="brush">
         <div class="panel-section-title selectable" id="mk-brush-title">
           <i class="fa-solid fa-paintbrush"></i> Brush
         </div>
@@ -594,7 +594,7 @@ PE.tools.marker = {
         </div>
       </div>
 
-      <div class="panel-section">
+      <div class="panel-section" data-section="eraser">
         <div class="panel-section-title selectable" id="mk-eraser-title">
           <i class="fa-solid fa-eraser"></i> Eraser
         </div>
@@ -646,16 +646,8 @@ PE.tools.marker = {
     const pressEl = document.getElementById('mk-pressure');
     if (pressEl) pressEl.addEventListener('change', (e) => { this.pressureEnabled = e.target.checked; });
 
-    const sectionMap = {
-      pencil: 'mk-pencil-title',
-      layers: 'mk-layers-title',
-      brush:  'mk-brush-title',
-      eraser: 'mk-eraser-title',
-    };
-    Object.entries(sectionMap).forEach(([name, id]) => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('click', () => this._setActiveSection(name));
-    });
+    // Sub-tool sections: clicking anywhere in a disabled section activates it.
+    PE.panels.wireSubSections((name) => this._setActiveSection(name));
   },
 
   /**

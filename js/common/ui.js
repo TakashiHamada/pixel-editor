@@ -184,6 +184,29 @@ PE.overlay = {
   },
 };
 
+/* --- Panel helpers (shared across tools) --- */
+PE.panels = {
+  /**
+   * Wire every `.panel-section[data-section]` currently in the DOM so that a
+   * click anywhere inside a disabled section activates it. The active section
+   * absorbs clicks in its controls as usual. Tools call this once from their
+   * _bindPanelEvents after building the panel HTML, passing a setter that
+   * switches the active sub-section by name.
+   *
+   * Because `.panel-section.disabled > *` has `pointer-events: none`, every
+   * click inside a disabled section lands on the section container itself, so
+   * a single listener per section is enough.
+   */
+  wireSubSections(setter) {
+    document.querySelectorAll('#left-panel .panel-section[data-section]').forEach(el => {
+      el.addEventListener('click', () => {
+        if (!el.classList.contains('disabled')) return;
+        setter(el.dataset.section);
+      });
+    });
+  },
+};
+
 /* --- Loading spinner (delayed to avoid flicker on fast operations) --- */
 PE.loading = {
   _timer: null,

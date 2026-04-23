@@ -102,7 +102,7 @@ PE.tools.scanner = {
   // ---------------------------------------------------------------
   _buildPanelHTML() {
     return `
-      <div class="panel-section">
+      <div class="panel-section" data-section="warp">
         <div class="panel-section-title selectable" id="scan-warp-title">
           <i class="fa-solid fa-crop-simple"></i> Crop Region
         </div>
@@ -129,7 +129,7 @@ PE.tools.scanner = {
         </div>
       </div>
 
-      <div class="panel-section">
+      <div class="panel-section" data-section="adjust">
         <div class="panel-section-title selectable" id="scan-adjust-title">
           <i class="fa-solid fa-sliders"></i> Adjust
         </div>
@@ -154,8 +154,8 @@ PE.tools.scanner = {
   },
 
   _bindPanelEvents() {
-    document.getElementById('scan-warp-title').addEventListener('click', () => this._setSubTool('warp'));
-    document.getElementById('scan-adjust-title').addEventListener('click', () => this._setSubTool('adjust'));
+    // Sub-tool sections: clicking anywhere in a disabled section activates it.
+    PE.panels.wireSubSections((name) => this._setSubTool(name));
 
     document.querySelectorAll('.scan-selmode-btn').forEach(btn => {
       btn.addEventListener('click', () => this._setSelectMode(btn.dataset.mode));
