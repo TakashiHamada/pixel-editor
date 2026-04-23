@@ -209,6 +209,21 @@ PE.tools.marker = {
 
   onCanvasClick() { /* pointer events do the work */ },
 
+  /**
+   * Called by file.close() before the image is cleared. Drops the paint
+   * session and hides the brush preview cursor so nothing lingers on screen.
+   */
+  onImageClose() {
+    this.layers = [];
+    this.pencilSource = null;
+    this.pencilRender = null;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.activeLayerId = null;
+    this._hideCursor();
+    this._renderLayerList();
+  },
+
   onKeydown(e) {
     if (e.ctrlKey || e.metaKey) return;
     if (e.key === 'b' || e.key === 'B') this._setBrushMode('brush');

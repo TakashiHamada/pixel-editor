@@ -248,6 +248,11 @@ PE.file = {
     const s = PE.state;
     if (!s.imageData) return;
 
+    // Let the active tool tear down any overlays / session state it owns
+    // (e.g. Scanner warp handles, Marker layers and brush cursor).
+    const tool = PE.toolRegistry && PE.toolRegistry[s.activeTool];
+    if (tool && tool.onImageClose) tool.onImageClose();
+
     s.imageData = null;
     s.imgWidth = 0;
     s.imgHeight = 0;

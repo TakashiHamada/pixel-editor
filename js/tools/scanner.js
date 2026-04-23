@@ -76,6 +76,16 @@ PE.tools.scanner = {
     // We don't push undo here — user should click Apply Adjust to save a step.
   },
 
+  /**
+   * Called by file.close() before the image is cleared. Tears down any
+   * overlays that must not outlive the image (warp handles, corner state).
+   */
+  onImageClose() {
+    this._hideHandles();
+    this.corners = null;
+    this.baseData = null;
+  },
+
   onKeydown(e) {
     if (e.key === 'p' || e.key === 'P') this._setSubTool('warp');
     if (e.key === 'a' || e.key === 'A') this._setSubTool('adjust');
