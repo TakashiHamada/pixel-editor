@@ -78,6 +78,7 @@ PE.tools.transparency = {
    * Handle tool-specific keyboard shortcuts.
    */
   onKeydown(e) {
+    if (!PE.state.imageData) return;
     if (e.key === 'e' || e.key === 'E') this._setSubTool('eyedropper');
     if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey) {
       this._setSubTool('select');

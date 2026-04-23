@@ -59,8 +59,14 @@ PE.file = {
 
     // Lock the entire left panel body when no image is loaded. Tool selector
     // buttons stay enabled so the user can browse what each tool looks like.
+    // `.locked` blocks the mouse via CSS; `inert` also removes focus + keyboard
+    // from every descendant so Tab can't sneak into preview-state controls.
     const panel = document.getElementById('left-panel');
-    if (panel) panel.classList.toggle('locked', !hasImage);
+    if (panel) {
+      panel.classList.toggle('locked', !hasImage);
+      if (hasImage) panel.removeAttribute('inert');
+      else panel.setAttribute('inert', '');
+    }
   },
 
   /**
@@ -131,6 +137,16 @@ PE.file = {
     PE.file._updateButtons();
     PE.log.info(`Opened: ${name} (${img.width} x ${img.height})`);
     PE.file.updateDropGuide();
+
+    // If a tool was selected pre-image (preview mode), it built its panel via
+    // an early-return path and skipped real initialization (pointer listeners,
+    // snapshots, etc.). Re-run activate() now that s.imageData exists so the
+    // tool enters its fully interactive state.
+    const active = s.activeTool && PE.toolRegistry && PE.toolRegistry[s.activeTool];
+    if (active) {
+      active.deactivate();
+      active.activate();
+    }
   },
 
   /**

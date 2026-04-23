@@ -92,6 +92,7 @@ PE.tools.scanner = {
   },
 
   onKeydown(e) {
+    if (!PE.state.imageData) return;
     if (e.key === 'p' || e.key === 'P') this._setSubTool('warp');
     if (e.key === 'a' || e.key === 'A') this._setSubTool('adjust');
     if (e.key === 'r' || e.key === 'R') this._resetCorners();
@@ -210,7 +211,7 @@ PE.tools.scanner = {
     }
   },
 
-  _setSubTool(name) {
+  _setSubTool(name, opts) {
     const prev = this.subTool;
     this.subTool = name;
     PE.panels.setActiveSection(name);
@@ -225,8 +226,10 @@ PE.tools.scanner = {
       this._hideHandles();
       // Entering Adjust from somewhere else: snapshot pre-Adjust state to undo
       // (one entry per session covers every slider move) and reset sliders.
+      // `opts.skipUndo` lets _applyWarp's auto-advance skip the push since it
+      // already snapshotted the pre-warp state moments earlier.
       if (PE.state.imageData && prev !== 'adjust') {
-        PE.history.pushUndo();
+        if (!opts || !opts.skipUndo) PE.history.pushUndo();
         this._snapshotBase();
         this.brightness = 0;
         this.contrast = 0;
@@ -468,8 +471,10 @@ PE.tools.scanner = {
     const verb = this.selectMode === 'rectangle' ? 'Crop' : 'Warp';
     PE.log.success(`${verb} applied — switched to Adjust`);
     // Automatically move on to Adjust mode once the region is confirmed, and
-    // flash the first Adjust row so the user sees the panel change.
-    this._setSubTool('adjust');
+    // flash the first Adjust row so the user sees the panel change. Suppress
+    // the Adjust-entry undo push — _applyWarp already pushed the pre-warp
+    // snapshot, so a second entry here would make Ctrl+Z appear to do nothing.
+    this._setSubTool('adjust', { skipUndo: true });
     const firstRow = document.querySelector(
       '#left-panel .panel-section[data-section="adjust"] .panel-row'
     );

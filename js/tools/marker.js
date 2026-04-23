@@ -247,6 +247,10 @@ PE.tools.marker = {
   },
 
   onKeydown(e) {
+    // Tool hotkeys must be inert until an image is loaded, otherwise
+    // previewing the tool pre-open would mutate section state and hide the
+    // native cursor (cursor-brush) behind a locked panel.
+    if (!PE.state.imageData) return;
     if (e.ctrlKey || e.metaKey) return;
     if (e.key === 'b' || e.key === 'B') this._setActiveSection('brush');
     if (e.key === 'e' || e.key === 'E') this._setActiveSection('eraser');
@@ -469,11 +473,14 @@ PE.tools.marker = {
     const { x, y } = this._eventToImageCoord(e);
     const p = this._getPressure(e);
 
-    // Interpolate between last and current point with spacing ~= size/4
+    // Interpolate between last and current point with spacing ~= size/4.
+    // Use the active sub-tool's size so eraser strokes aren't measured with
+    // brush spacing when eraserSize !== brushSize.
+    const activeSize = this.activeSection === 'eraser' ? this.eraserSize : this.brushSize;
     const dx = x - this._lastX;
     const dy = y - this._lastY;
     const dist = Math.hypot(dx, dy);
-    const spacing = Math.max(1, this.brushSize * 0.2);
+    const spacing = Math.max(1, activeSize * 0.2);
     const steps = Math.max(1, Math.ceil(dist / spacing));
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
