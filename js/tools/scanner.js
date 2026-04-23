@@ -40,6 +40,7 @@ PE.tools.scanner = {
 
   // Tool state
   subTool: 'warp',          // 'warp' | 'adjust'
+  selectMode: 'perspective',// 'perspective' | 'rectangle'
   corners: null,            // [{x,y}, ...] in image coords (TL, TR, BR, BL)
   baseData: null,           // ImageData snapshot used as adjust source
   grayscale: true,
@@ -62,6 +63,7 @@ PE.tools.scanner = {
     this._bindPanelEvents();
     // Seed baseData from current image so Adjust has something to preview from.
     if (PE.state.imageData) this._snapshotBase();
+    this._setSelectMode(this.selectMode);
     this._setSubTool(this.subTool);
   },
 
@@ -90,7 +92,15 @@ PE.tools.scanner = {
     return `
       <div class="panel-section">
         <div class="panel-section-title selectable" id="scan-warp-title">
-          <i class="fa-solid fa-crop-simple"></i> Perspective &amp; Crop
+          <i class="fa-solid fa-crop-simple"></i> Crop Region
+        </div>
+        <div class="panel-row mk-mode-row">
+          <button class="btn-panel scan-selmode-btn" id="scan-selmode-perspective" data-mode="perspective">
+            <i class="fa-solid fa-object-ungroup"></i> Perspective
+          </button>
+          <button class="btn-panel scan-selmode-btn" id="scan-selmode-rectangle" data-mode="rectangle">
+            <i class="fa-solid fa-vector-square"></i> Rectangle
+          </button>
         </div>
         <div class="panel-hint" id="scan-warp-hint">
           Drag the four red corners to the edges of the document.
@@ -102,7 +112,7 @@ PE.tools.scanner = {
         </div>
         <div class="panel-row">
           <button class="btn-panel btn-action btn-compact" id="scan-apply-warp">
-            <i class="fa-solid fa-check"></i> Apply Warp
+            <i class="fa-solid fa-check"></i> <span id="scan-apply-label">Apply Warp</span>
           </button>
         </div>
       </div>
@@ -151,6 +161,10 @@ PE.tools.scanner = {
     document.getElementById('scan-warp-title').addEventListener('click', () => this._setSubTool('warp'));
     document.getElementById('scan-adjust-title').addEventListener('click', () => this._setSubTool('adjust'));
 
+    document.querySelectorAll('.scan-selmode-btn').forEach(btn => {
+      btn.addEventListener('click', () => this._setSelectMode(btn.dataset.mode));
+    });
+
     document.getElementById('scan-reset-corners').addEventListener('click', () => this._resetCorners());
     document.getElementById('scan-apply-warp').addEventListener('click', () => this._applyWarp());
 
@@ -173,6 +187,35 @@ PE.tools.scanner = {
 
     document.getElementById('scan-auto-levels').addEventListener('click', () => this._autoLevels());
     document.getElementById('scan-apply-adjust').addEventListener('click', () => this._applyAdjust());
+  },
+
+  _setSelectMode(mode) {
+    this.selectMode = mode;
+    document.querySelectorAll('.scan-selmode-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    const hint = document.getElementById('scan-warp-hint');
+    if (hint) {
+      hint.textContent = mode === 'perspective'
+        ? 'Drag each corner to match the edges of the document.'
+        : 'Drag a corner to resize the crop rectangle.';
+    }
+    const label = document.getElementById('scan-apply-label');
+    if (label) label.textContent = mode === 'perspective' ? 'Apply Warp' : 'Apply Crop';
+    // Snap corners to axis-aligned rectangle when entering rectangle mode.
+    if (mode === 'rectangle' && this.corners) {
+      const xs = this.corners.map(c => c.x);
+      const ys = this.corners.map(c => c.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      this.corners = [
+        { x: minX, y: minY },
+        { x: maxX, y: minY },
+        { x: maxX, y: maxY },
+        { x: minX, y: maxY },
+      ];
+      this._repositionHandles();
+    }
   },
 
   _setSubTool(name) {
@@ -216,12 +259,11 @@ PE.tools.scanner = {
     if (!s.imageData) return;
     const w = s.imgWidth;
     const h = s.imgHeight;
-    const inset = Math.min(w, h) * 0.08;
     this.corners = [
-      { x: inset,         y: inset },          // TL
-      { x: w - 1 - inset, y: inset },          // TR
-      { x: w - 1 - inset, y: h - 1 - inset },  // BR
-      { x: inset,         y: h - 1 - inset },  // BL
+      { x: 0,     y: 0 },     // TL
+      { x: w - 1, y: 0 },     // TR
+      { x: w - 1, y: h - 1 }, // BR
+      { x: 0,     y: h - 1 }, // BL
     ];
     if (this.subTool === 'warp') this._showHandles();
   },
@@ -305,10 +347,19 @@ PE.tools.scanner = {
       const rect = PE.dom.container.getBoundingClientRect();
       const imgX = (ev.clientX - rect.left - s.panX) / s.zoom;
       const imgY = (ev.clientY - rect.top - s.panY) / s.zoom;
-      this.corners[this._dragging] = {
-        x: Math.max(0, Math.min(s.imgWidth - 1, imgX)),
-        y: Math.max(0, Math.min(s.imgHeight - 1, imgY)),
-      };
+      const nx = Math.max(0, Math.min(s.imgWidth - 1, imgX));
+      const ny = Math.max(0, Math.min(s.imgHeight - 1, imgY));
+      const i = this._dragging;
+      this.corners[i] = { x: nx, y: ny };
+      if (this.selectMode === 'rectangle') {
+        // Keep rectangle axis-aligned: update the two neighbors sharing an edge.
+        // Corner order: 0=TL, 1=TR, 2=BR, 3=BL
+        // Neighbor pairs [self, y-mate (shares y), x-mate (shares x)]
+        const pairs = { 0: [1, 3], 1: [0, 2], 2: [3, 1], 3: [2, 0] };
+        const [yMate, xMate] = pairs[i];
+        this.corners[yMate].y = ny;
+        this.corners[xMate].x = nx;
+      }
       this._repositionHandles();
     };
     this._pointerUpHook = () => {
@@ -422,8 +473,10 @@ PE.tools.scanner = {
     PE.zoom.fitToView();
     PE.file._updateImageInfo();
     this._resetCorners();
-    if (this.subTool === 'warp') this._showHandles();
-    PE.log.success(`Warp applied (${outW} x ${outH})`);
+    const verb = this.selectMode === 'rectangle' ? 'Crop' : 'Warp';
+    PE.log.success(`${verb} applied (${outW} x ${outH})`);
+    // Automatically move on to Adjust mode once the region is confirmed.
+    this._setSubTool('adjust');
   },
 
   /**

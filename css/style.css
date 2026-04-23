@@ -673,7 +673,32 @@ body {
   cursor: pointer;
 }
 
-#canvas-container.cursor-brush { cursor: crosshair; }
+#canvas-container.cursor-brush { cursor: none; }
+/* Pan mode takes precedence over brush mode for cursor + preview circle. */
+#canvas-container.cursor-brush.cursor-pan { cursor: grab; }
+#canvas-container.cursor-brush.cursor-pan:active { cursor: grabbing; }
+#canvas-container.cursor-pan .marker-cursor { display: none !important; }
+
+/* --- Marker: brush cursor preview (tracks pointer, scales with zoom) --- */
+.marker-cursor {
+  position: absolute;
+  border: 1.5px solid rgba(200, 40, 40, 0.9);
+  background: rgba(200, 40, 40, 0.08);
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  box-shadow: 0 0 1px rgba(0, 0, 0, 0.7), inset 0 0 1px rgba(0, 0, 0, 0.7);
+  display: none;
+}
+
+.marker-cursor.visible { display: block; }
+
+.marker-cursor.eraser {
+  border-style: dashed;
+  border-color: rgba(230, 230, 230, 0.9);
+  background: rgba(255, 255, 255, 0.08);
+}
 
 /* --- Scanner: warp overlay & handles --- */
 .warp-svg {
@@ -824,6 +849,19 @@ body {
 }
 
 .mk-mode-btn.active {
+  background: var(--accent);
+  border-color: var(--accent-active);
+  color: #fff;
+}
+
+/* --- Scanner: selection mode buttons (reuse mk-mode-row layout) --- */
+.scan-selmode-btn {
+  flex: 1;
+  padding: 7px 6px;
+  font-size: 11px;
+}
+
+.scan-selmode-btn.active {
   background: var(--accent);
   border-color: var(--accent-active);
   color: #fff;

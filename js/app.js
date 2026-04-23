@@ -26,10 +26,18 @@ PE.registerTool = function(tool) {
 PE.activateTool = function(toolId) {
   const s = PE.state;
 
-  // Deactivate current tool
-  if (s.activeTool && PE.toolRegistry[s.activeTool]) {
-    PE.toolRegistry[s.activeTool].deactivate();
+  // Let the current tool veto the switch (e.g. Marker with unsaved layers).
+  const current = s.activeTool && PE.toolRegistry[s.activeTool];
+  if (current && current.canDeactivate && !current.canDeactivate()) {
+    // User declined; keep current tool highlighted.
+    document.querySelectorAll('.btn-tool').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.toolId === s.activeTool);
+    });
+    return;
   }
+
+  // Deactivate current tool
+  if (current) current.deactivate();
 
   // Update menu bar buttons
   document.querySelectorAll('.btn-tool').forEach(btn => {

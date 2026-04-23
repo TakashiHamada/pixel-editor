@@ -66,6 +66,12 @@ PE.tools.marker = {
   _onPointerDown: null,
   _onPointerMove: null,
   _onPointerUp: null,
+  _onPointerEnter: null,
+  _onPointerLeave: null,
+  _onZoomChange: null,
+
+  // Brush cursor preview (DOM circle)
+  _cursorEl: null,
 
   // Default palette cycled when creating new layers
   _palette: ['#E85D5D', '#F2B84B', '#69B56A', '#4A8FD9', '#9b59b6', '#8b5a2b'],
@@ -114,11 +120,40 @@ PE.tools.marker = {
     this._onPointerDown = (e) => this._handlePointerDown(e);
     this._onPointerMove = (e) => this._handlePointerMove(e);
     this._onPointerUp   = (e) => this._handlePointerUp(e);
+    this._onPointerEnter = () => this._showCursor();
+    this._onPointerLeave = () => this._hideCursor();
     container.addEventListener('pointerdown', this._onPointerDown);
     window.addEventListener('pointermove', this._onPointerMove);
     window.addEventListener('pointerup',   this._onPointerUp);
+    container.addEventListener('pointerenter', this._onPointerEnter);
+    container.addEventListener('pointerleave', this._onPointerLeave);
+
+    // Create brush preview cursor and hook zoom changes so its size tracks zoom.
+    this._createCursor();
+    this._onZoomChange = () => this._updateCursorSize();
+    PE.zoom.transformListeners.push(this._onZoomChange);
 
     this._composite();
+  },
+
+  /**
+   * Return true if the tool may be deactivated, false to veto.
+   * Marker vetoes unless the user confirms that layer data will be discarded.
+   */
+  canDeactivate() {
+    if (!this._hasPaintedContent()) return true;
+    return window.confirm(
+      'Leaving the Marker tool will discard all color layers '
+      + '(they will be baked into a single flat image).\n\n'
+      + 'If you want to keep your work as editable layers, stay on Marker. '
+      + 'To save the painted result, click Download (JPEG) first.\n\n'
+      + 'Continue and discard layers?'
+    );
+  },
+
+  _hasPaintedContent() {
+    // Any undo history implies at least one stroke was drawn.
+    return this.undoStack.length > 0;
   },
 
   deactivate() {
@@ -129,7 +164,17 @@ PE.tools.marker = {
     if (this._onPointerDown) container.removeEventListener('pointerdown', this._onPointerDown);
     if (this._onPointerMove) window.removeEventListener('pointermove', this._onPointerMove);
     if (this._onPointerUp)   window.removeEventListener('pointerup',   this._onPointerUp);
+    if (this._onPointerEnter) container.removeEventListener('pointerenter', this._onPointerEnter);
+    if (this._onPointerLeave) container.removeEventListener('pointerleave', this._onPointerLeave);
     this._onPointerDown = this._onPointerMove = this._onPointerUp = null;
+    this._onPointerEnter = this._onPointerLeave = null;
+
+    if (this._onZoomChange) {
+      const idx = PE.zoom.transformListeners.indexOf(this._onZoomChange);
+      if (idx >= 0) PE.zoom.transformListeners.splice(idx, 1);
+      this._onZoomChange = null;
+    }
+    this._destroyCursor();
 
     // Bake composite back into imageData so other tools see the painted result.
     if (s.imageData && this.pencilSource) {
@@ -362,6 +407,9 @@ PE.tools.marker = {
   },
 
   _handlePointerMove(e) {
+    // Always update the brush preview cursor, even when not drawing.
+    this._positionCursor(e);
+
     if (!this._drawing) return;
     const layer = this._getActiveLayer();
     if (!layer) { this._drawing = false; return; }
@@ -534,6 +582,7 @@ PE.tools.marker = {
       sizeEl.addEventListener('input', (e) => {
         this.brushSize = parseInt(e.target.value, 10);
         if (sizeVal) sizeVal.textContent = this.brushSize;
+        this._updateCursorSize();
       });
     }
 
@@ -550,6 +599,7 @@ PE.tools.marker = {
     document.querySelectorAll('.mk-mode-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === mode);
     });
+    this._updateCursorSize();
   },
 
   _adjustBrushSize(delta) {
@@ -558,6 +608,7 @@ PE.tools.marker = {
     const sizeVal = document.getElementById('mk-size-val');
     if (sizeEl) sizeEl.value = this.brushSize;
     if (sizeVal) sizeVal.textContent = this.brushSize;
+    this._updateCursorSize();
   },
 
   _renderLayerList() {
@@ -627,6 +678,43 @@ PE.tools.marker = {
         if (valEl) valEl.textContent = v;
       });
     });
+  },
+
+  // ---------------------------------------------------------------
+  // Brush preview cursor (DOM element tracking the pointer)
+  // ---------------------------------------------------------------
+  _createCursor() {
+    if (this._cursorEl) return;
+    const el = document.createElement('div');
+    el.className = 'marker-cursor';
+    PE.dom.container.appendChild(el);
+    this._cursorEl = el;
+    this._updateCursorSize();
+  },
+
+  _destroyCursor() {
+    if (this._cursorEl) {
+      this._cursorEl.remove();
+      this._cursorEl = null;
+    }
+  },
+
+  _showCursor() { if (this._cursorEl) this._cursorEl.classList.add('visible'); },
+  _hideCursor() { if (this._cursorEl) this._cursorEl.classList.remove('visible'); },
+
+  _updateCursorSize() {
+    if (!this._cursorEl) return;
+    const size = Math.max(2, this.brushSize * PE.state.zoom);
+    this._cursorEl.style.width  = `${size}px`;
+    this._cursorEl.style.height = `${size}px`;
+    this._cursorEl.classList.toggle('eraser', this.brushMode === 'eraser');
+  },
+
+  _positionCursor(e) {
+    if (!this._cursorEl) return;
+    const rect = PE.dom.container.getBoundingClientRect();
+    this._cursorEl.style.left = `${e.clientX - rect.left}px`;
+    this._cursorEl.style.top  = `${e.clientY - rect.top}px`;
   },
 
   // ---------------------------------------------------------------
