@@ -556,17 +556,10 @@ PE.tools.scanner = {
    */
   _pushAdjustUndoOnce() {
     if (this._adjustUndoPushed) return;
-    const s = PE.state;
-    if (!s.imageData || !this.baseData) return;
-    const snap = new ImageData(
-      new Uint8ClampedArray(this.baseData.data),
-      s.imgWidth, s.imgHeight
-    );
-    s.undoStack.push(snap);
-    const cap = (typeof PE.MAX_UNDO === 'number') ? PE.MAX_UNDO : 20;
-    if (s.undoStack.length > cap) s.undoStack.shift();
-    s.redoStack = [];
-    PE.history.updateUI();
+    if (!PE.state.imageData || !this.baseData) return;
+    // Delegate stack push / trim / redo-clear / UI refresh to the shared
+    // helper so any future tweak to the undo contract stays in one place.
+    PE.history.pushSnapshot(this.baseData);
     this._adjustUndoPushed = true;
   },
 
