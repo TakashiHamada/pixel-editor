@@ -112,6 +112,24 @@ body {
   text-align: center;
 }
 
+/* Open button pulsing glow: only runs while no image is loaded
+   (the Open button becomes :disabled once an image is open). */
+#btn-open:not(:disabled) {
+  animation: open-pulse 1.8s ease-in-out infinite;
+  border-color: var(--accent);
+}
+
+@keyframes open-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+    border-color: var(--accent);
+  }
+  50% {
+    box-shadow: 0 0 10px 2px var(--accent-glow);
+    border-color: var(--accent-active);
+  }
+}
+
 /* Tool selector buttons in center */
 .btn-tool {
   background: var(--bg-medium);
