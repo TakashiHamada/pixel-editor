@@ -4,8 +4,9 @@
    Workflow:
    1. Perspective & Crop: drag 4 corner handles to the true corners
       of the sketched document; Apply Warp rectifies it.
-   2. Adjust: grayscale / brightness / contrast / threshold sliders
-      with live preview, plus an Auto Levels one-click fix.
+   2. Adjust: grayscale / brightness / contrast sliders with live
+      preview that is committed immediately (one undo entry per
+      Adjust session).
 
    Exports as JPEG.
    ============================================================ */
@@ -21,7 +22,7 @@ PE.tools.scanner = {
 
   description: 'Clean up photographed or scanned sketches. Drag the four corner handles '
     + 'to the corners of the page to remove perspective distortion, then adjust grayscale, '
-    + 'brightness, contrast, and threshold to produce a crisp line drawing.',
+    + 'brightness, and contrast for a clean result. Adjust changes apply as you slide.',
 
   getShortcutsHTML() {
     return `
@@ -33,7 +34,6 @@ PE.tools.scanner = {
         <li><span class="shortcut-desc">Perspective mode</span> <span class="shortcut-key">P</span></li>
         <li><span class="shortcut-desc">Adjust mode</span> <span class="shortcut-key">A</span></li>
         <li><span class="shortcut-desc">Reset handles</span> <span class="shortcut-key">R</span></li>
-        <li><span class="shortcut-desc">Auto Levels</span> <span class="shortcut-key">L</span></li>
       </ul>
     `;
   },
@@ -46,7 +46,6 @@ PE.tools.scanner = {
   grayscale: true,
   brightness: 0,
   contrast: 0,
-  threshold: 0,
 
   // Internal
   _handles: [],
@@ -64,7 +63,11 @@ PE.tools.scanner = {
     // Seed baseData from current image so Adjust has something to preview from.
     if (PE.state.imageData) this._snapshotBase();
     this._setSelectMode(this.selectMode);
-    this._setSubTool(this.subTool);
+    // Force _setSubTool to treat this as a fresh entry (so Adjust re-snapshots
+    // and pushes undo even when the saved subTool was already 'adjust').
+    const initial = this.subTool || 'warp';
+    this.subTool = null;
+    this._setSubTool(initial);
   },
 
   deactivate() {
@@ -72,8 +75,8 @@ PE.tools.scanner = {
     const panel = document.getElementById('left-panel');
     panel.classList.remove('visible');
     panel.innerHTML = '';
-    // Commit current preview (if any) so other tools see the adjusted image.
-    // We don't push undo here — user should click Apply Adjust to save a step.
+    // Adjust changes are already committed to s.imageData live. The single
+    // undo entry pushed on entry to Adjust is enough to revert the session.
   },
 
   /**
@@ -90,7 +93,6 @@ PE.tools.scanner = {
     if (e.key === 'p' || e.key === 'P') this._setSubTool('warp');
     if (e.key === 'a' || e.key === 'A') this._setSubTool('adjust');
     if (e.key === 'r' || e.key === 'R') this._resetCorners();
-    if (e.key === 'l' || e.key === 'L') this._autoLevels();
   },
 
   onCanvasClick() { /* no-op: Scanner interactions happen via panel + handles */ },
@@ -147,22 +149,6 @@ PE.tools.scanner = {
                  min="-100" max="100" value="${this.contrast}">
           <span class="panel-slider-value" id="scan-contrast-val">${this.contrast}</span>
         </div>
-        <div class="panel-row">
-          <span class="panel-label">Threshold</span>
-          <input type="range" class="panel-slider" id="scan-threshold"
-                 min="0" max="255" value="${this.threshold}">
-          <span class="panel-slider-value" id="scan-threshold-val">${this.threshold}</span>
-        </div>
-        <div class="panel-row">
-          <button class="btn-panel" id="scan-auto-levels">
-            <i class="fa-solid fa-magic-wand-sparkles"></i> Auto Levels
-          </button>
-        </div>
-        <div class="panel-row">
-          <button class="btn-panel btn-action btn-compact" id="scan-apply-adjust">
-            <i class="fa-solid fa-check"></i> Apply Adjust
-          </button>
-        </div>
       </div>
     `;
   },
@@ -193,10 +179,6 @@ PE.tools.scanner = {
     };
     bindSlider('scan-brightness', 'brightness');
     bindSlider('scan-contrast', 'contrast');
-    bindSlider('scan-threshold', 'threshold');
-
-    document.getElementById('scan-auto-levels').addEventListener('click', () => this._autoLevels());
-    document.getElementById('scan-apply-adjust').addEventListener('click', () => this._applyAdjust());
   },
 
   _setSelectMode(mode) {
@@ -229,6 +211,7 @@ PE.tools.scanner = {
   },
 
   _setSubTool(name) {
+    const prev = this.subTool;
     this.subTool = name;
     const warpTitle = document.getElementById('scan-warp-title');
     const adjTitle = document.getElementById('scan-adjust-title');
@@ -249,19 +232,18 @@ PE.tools.scanner = {
       this._showHandles();
     } else {
       this._hideHandles();
-      // Entering adjust: refresh base snapshot from current image and reset sliders
-      if (PE.state.imageData) {
+      // Entering Adjust from somewhere else: snapshot pre-Adjust state to undo
+      // (one entry per session covers every slider move) and reset sliders.
+      if (PE.state.imageData && prev !== 'adjust') {
+        PE.history.pushUndo();
         this._snapshotBase();
         this.brightness = 0;
         this.contrast = 0;
-        this.threshold = 0;
         const bEl = document.getElementById('scan-brightness');
         const cEl = document.getElementById('scan-contrast');
-        const tEl = document.getElementById('scan-threshold');
         if (bEl) { bEl.value = 0; document.getElementById('scan-brightness-val').textContent = '0'; }
         if (cEl) { cEl.value = 0; document.getElementById('scan-contrast-val').textContent = '0'; }
-        if (tEl) { tEl.value = 0; document.getElementById('scan-threshold-val').textContent = '0'; }
-        // Apply grayscale immediately if enabled
+        // Apply grayscale immediately if enabled.
         this._renderPreview();
       }
     }
@@ -557,7 +539,6 @@ PE.tools.scanner = {
     const c = this.contrast;
     const cf = (259 * (c + 255)) / (255 * (259 - c));
     const b = this.brightness;
-    const th = this.threshold;
     const gray = this.grayscale;
 
     for (let i = 0; i < len; i += 4) {
@@ -570,84 +551,11 @@ PE.tools.scanner = {
       r = cf * (r - 128) + 128 + b;
       g = cf * (g - 128) + 128 + b;
       bl = cf * (bl - 128) + 128 + b;
-      // Threshold (binarize by luminance)
-      if (th > 0) {
-        const y = 0.299 * r + 0.587 * g + 0.114 * bl;
-        const v = y > th ? 255 : 0;
-        r = g = bl = v;
-      }
       dst[i]     = Math.max(0, Math.min(255, r));
       dst[i + 1] = Math.max(0, Math.min(255, g));
       dst[i + 2] = Math.max(0, Math.min(255, bl));
       dst[i + 3] = src[i + 3];
     }
     PE.dom.mainCtx.putImageData(s.imageData, 0, 0);
-  },
-
-  _autoLevels() {
-    if (!this.baseData) {
-      PE.log.warn('No image loaded');
-      return;
-    }
-    // Build luminance histogram from baseData
-    const d = this.baseData.data;
-    const hist = new Uint32Array(256);
-    let total = 0;
-    for (let i = 0; i < d.length; i += 4) {
-      const y = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
-      hist[y]++;
-      total++;
-    }
-    // 1% and 99% percentile
-    const lowCut = total * 0.01;
-    const highCut = total * 0.99;
-    let acc = 0, lo = 0, hi = 255;
-    for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= lowCut) { lo = v; break; } }
-    acc = 0;
-    for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= highCut) { hi = v; break; } }
-    if (hi - lo < 2) {
-      PE.log.warn('Auto Levels: image has no usable range');
-      return;
-    }
-    // Stretch baseData in place
-    const scale = 255 / (hi - lo);
-    for (let i = 0; i < d.length; i += 4) {
-      for (let k = 0; k < 3; k++) {
-        const v = (d[i + k] - lo) * scale;
-        d[i + k] = Math.max(0, Math.min(255, Math.round(v)));
-      }
-    }
-    this._renderPreview();
-    PE.log.success(`Auto Levels applied (${lo}..${hi})`);
-  },
-
-  _applyAdjust() {
-    const s = PE.state;
-    if (!s.imageData || !this.baseData) {
-      PE.log.warn('No image loaded');
-      return;
-    }
-    // baseData is pre-adjust snapshot; push it to undo so Ctrl+Z reverts fully.
-    const prev = new ImageData(
-      new Uint8ClampedArray(this.baseData.data),
-      s.imgWidth, s.imgHeight
-    );
-    s.undoStack.push(prev);
-    if (s.undoStack.length > PE.MAX_UNDO) s.undoStack.shift();
-    s.redoStack = [];
-    PE.history.updateUI();
-
-    // Main canvas already shows current preview; lock it in as the new base.
-    this._snapshotBase();
-    this.brightness = 0;
-    this.contrast = 0;
-    this.threshold = 0;
-    const bEl = document.getElementById('scan-brightness');
-    const cEl = document.getElementById('scan-contrast');
-    const tEl = document.getElementById('scan-threshold');
-    if (bEl) { bEl.value = 0; document.getElementById('scan-brightness-val').textContent = '0'; }
-    if (cEl) { cEl.value = 0; document.getElementById('scan-contrast-val').textContent = '0'; }
-    if (tEl) { tEl.value = 0; document.getElementById('scan-threshold-val').textContent = '0'; }
-    PE.log.success('Adjustments applied');
   },
 };
