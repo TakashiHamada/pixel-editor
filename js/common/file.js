@@ -67,6 +67,15 @@ PE.file = {
       if (hasImage) panel.removeAttribute('inert');
       else panel.setAttribute('inert', '');
     }
+
+    // No image → also strip any tool-cursor classes on the canvas. Without
+    // this, closing while Marker is in Brush/Eraser leaves `cursor-brush`
+    // (cursor: none) on the container, so the native cursor stays hidden.
+    if (!hasImage && PE.dom.container) {
+      const cursorClasses = Array.from(PE.dom.container.classList)
+        .filter(c => c.startsWith('cursor-'));
+      if (cursorClasses.length) PE.dom.container.classList.remove(...cursorClasses);
+    }
   },
 
   /**
@@ -108,6 +117,16 @@ PE.file = {
     const mainCanvas = PE.dom.mainCanvas;
     const overlayCanvas = PE.dom.overlayCanvas;
     const mainCtx = PE.dom.mainCtx;
+
+    // If an image is already loaded (e.g. drag-dropping a new file while the
+    // Close button is hidden), notify the active tool so it drops any
+    // image-sized state (Scanner corners, Marker layers, etc.) before we
+    // overwrite s.imageData. The later deactivate()/activate() cycle gives
+    // the tool a clean slate that matches the new image dimensions.
+    if (s.imageData) {
+      const prev = s.activeTool && PE.toolRegistry && PE.toolRegistry[s.activeTool];
+      if (prev && prev.onImageClose) prev.onImageClose();
+    }
 
     s.imgWidth = img.width;
     s.imgHeight = img.height;

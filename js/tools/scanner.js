@@ -548,10 +548,11 @@ PE.tools.scanner = {
   /**
    * Lazy undo snapshot for the current Adjust session. Pushes baseData (the
    * pristine pre-adjust state captured on section entry) onto the global
-   * undo stack the first time the user touches a control in this session.
-   * Subsequent changes in the same session are no-ops. `_adjustUndoPushed`
-   * is reset to false on entering Adjust, and pre-set to true when entering
-   * via _applyWarp's auto-advance (which already pushed pre-warp to undo).
+   * undo stack the first time it runs in a given session, and marks the
+   * session as pushed so subsequent calls are no-ops. `_adjustUndoPushed`
+   * starts false when entering Adjust; the entry path calls this method
+   * eagerly when grayscale is on (because the entry render mutates pixels),
+   * otherwise it stays lazy until the first slider / checkbox interaction.
    */
   _pushAdjustUndoOnce() {
     if (this._adjustUndoPushed) return;
