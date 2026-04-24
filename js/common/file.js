@@ -38,8 +38,9 @@ PE.file = {
   /**
    * Update menu bar button states based on whether an image is loaded.
    * Also refresh the Download button's label to reflect the active tool's format.
-   * When no image is loaded, tool selector buttons and the entire left panel
-   * are locked so the user cannot invoke any feature without an image.
+   * When no image is loaded, the left panel receives `.locked` so its controls
+   * are inert, but tool selector buttons stay enabled so the user can still
+   * switch between tools to preview what each one offers.
    */
   _updateButtons() {
     const hasImage = !!PE.state.imageData;
@@ -56,13 +57,40 @@ PE.file = {
     }
     if (btnClose) btnClose.disabled = !hasImage;
 
-    // Tool selector buttons: no image = nothing to do with them.
-    document.querySelectorAll('.btn-tool').forEach(btn => {
-      btn.disabled = !hasImage;
-    });
-    // Lock the entire left panel body when no image is loaded.
+    // Lock the entire left panel body when no image is loaded. Tool selector
+    // buttons stay enabled so the user can browse what each tool looks like.
+    // `.locked` blocks the mouse via CSS; `inert` also removes focus + keyboard
+    // from every descendant so Tab can't sneak into preview-state controls.
+    // Fallback for browsers that predate `inert` (Safari < 15.5, Firefox <
+    // 112): toggle tabindex="-1" on every focusable descendant so keyboard
+    // navigation can't mutate tool state while the panel is locked.
+    // PE.panels.setActiveSection re-establishes per-control tabindex when the
+    // tool re-activates after unlock, so clearing on unlock is safe.
     const panel = document.getElementById('left-panel');
-    if (panel) panel.classList.toggle('locked', !hasImage);
+    if (panel) {
+      panel.classList.toggle('locked', !hasImage);
+      const inertSupported = 'inert' in HTMLElement.prototype;
+      if (inertSupported) {
+        if (hasImage) panel.removeAttribute('inert');
+        else panel.setAttribute('inert', '');
+      } else {
+        panel.querySelectorAll(
+          'input, button, select, textarea, a[href], [tabindex]'
+        ).forEach(el => {
+          if (hasImage) el.removeAttribute('tabindex');
+          else el.setAttribute('tabindex', '-1');
+        });
+      }
+    }
+
+    // No image → also strip any tool-cursor classes on the canvas. Without
+    // this, closing while Marker is in Brush/Eraser leaves `cursor-brush`
+    // (cursor: none) on the container, so the native cursor stays hidden.
+    if (!hasImage && PE.dom.container) {
+      const cursorClasses = Array.from(PE.dom.container.classList)
+        .filter(c => c.startsWith('cursor-'));
+      if (cursorClasses.length) PE.dom.container.classList.remove(...cursorClasses);
+    }
   },
 
   /**
@@ -105,6 +133,20 @@ PE.file = {
     const overlayCanvas = PE.dom.overlayCanvas;
     const mainCtx = PE.dom.mainCtx;
 
+    // If an image is already loaded (e.g. drag-dropping a new file while the
+    // Close button is hidden), let the active tool veto the replacement and,
+    // if allowed, drop any image-sized state (Scanner corners, Marker layers,
+    // etc.) before we overwrite s.imageData. The later deactivate()/activate()
+    // cycle gives the tool a clean slate that matches the new image's size.
+    if (s.imageData) {
+      const prev = s.activeTool && PE.toolRegistry && PE.toolRegistry[s.activeTool];
+      if (prev && prev.canDeactivate && !prev.canDeactivate()) {
+        // User declined (e.g. Marker with unsaved layers). Keep current image.
+        return;
+      }
+      if (prev && prev.onImageClose) prev.onImageClose();
+    }
+
     s.imgWidth = img.width;
     s.imgHeight = img.height;
     s.fileName = name || 'image.png';
@@ -133,6 +175,16 @@ PE.file = {
     PE.file._updateButtons();
     PE.log.info(`Opened: ${name} (${img.width} x ${img.height})`);
     PE.file.updateDropGuide();
+
+    // If a tool was selected pre-image (preview mode), it built its panel via
+    // an early-return path and skipped real initialization (pointer listeners,
+    // snapshots, etc.). Re-run activate() now that s.imageData exists so the
+    // tool enters its fully interactive state.
+    const active = s.activeTool && PE.toolRegistry && PE.toolRegistry[s.activeTool];
+    if (active) {
+      active.deactivate();
+      active.activate();
+    }
   },
 
   /**

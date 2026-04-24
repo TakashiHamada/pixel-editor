@@ -4,8 +4,9 @@
    Workflow:
    1. Perspective & Crop: drag 4 corner handles to the true corners
       of the sketched document; Apply Warp rectifies it.
-   2. Adjust: grayscale / brightness / contrast / threshold sliders
-      with live preview, plus an Auto Levels one-click fix.
+   2. Adjust: grayscale / brightness / contrast sliders with live
+      preview that is committed immediately (one undo entry per
+      Adjust session).
 
    Exports as JPEG.
    ============================================================ */
@@ -21,7 +22,7 @@ PE.tools.scanner = {
 
   description: 'Clean up photographed or scanned sketches. Drag the four corner handles '
     + 'to the corners of the page to remove perspective distortion, then adjust grayscale, '
-    + 'brightness, contrast, and threshold to produce a crisp line drawing.',
+    + 'brightness, and contrast for a clean result. Adjust changes apply as you slide.',
 
   getShortcutsHTML() {
     return `
@@ -33,7 +34,6 @@ PE.tools.scanner = {
         <li><span class="shortcut-desc">Perspective mode</span> <span class="shortcut-key">P</span></li>
         <li><span class="shortcut-desc">Adjust mode</span> <span class="shortcut-key">A</span></li>
         <li><span class="shortcut-desc">Reset handles</span> <span class="shortcut-key">R</span></li>
-        <li><span class="shortcut-desc">Auto Levels</span> <span class="shortcut-key">L</span></li>
       </ul>
     `;
   },
@@ -46,7 +46,6 @@ PE.tools.scanner = {
   grayscale: true,
   brightness: 0,
   contrast: 0,
-  threshold: 0,
 
   // Internal
   _handles: [],
@@ -61,10 +60,15 @@ PE.tools.scanner = {
     panel.innerHTML = this._buildPanelHTML();
     panel.classList.add('visible');
     this._bindPanelEvents();
-    // Seed baseData from current image so Adjust has something to preview from.
-    if (PE.state.imageData) this._snapshotBase();
     this._setSelectMode(this.selectMode);
-    this._setSubTool(this.subTool);
+    // Force _setSubTool to treat this as a fresh entry (so Adjust re-snapshots
+    // baseData and resets sliders even when the saved subTool was already
+    // 'adjust'). The Adjust-session undo snapshot is pushed lazily from
+    // _pushAdjustUndoOnce on the first control change (or eagerly on entry
+    // when grayscale is already enabled — see _setSubTool for the full flow).
+    const initial = this.subTool || 'warp';
+    this.subTool = null;
+    this._setSubTool(initial);
   },
 
   deactivate() {
@@ -72,8 +76,10 @@ PE.tools.scanner = {
     const panel = document.getElementById('left-panel');
     panel.classList.remove('visible');
     panel.innerHTML = '';
-    // Commit current preview (if any) so other tools see the adjusted image.
-    // We don't push undo here — user should click Apply Adjust to save a step.
+    // Adjust changes are already committed to s.imageData live. The Adjust
+    // session's single undo entry (pushed lazily on the first control
+    // interaction, or eagerly on entry if grayscale mutates the image) is
+    // enough to revert the whole session on Ctrl+Z.
   },
 
   /**
@@ -84,13 +90,17 @@ PE.tools.scanner = {
     this._hideHandles();
     this.corners = null;
     this.baseData = null;
+    // If the user opens a fresh image while Scanner is still active, the next
+    // _setSubTool('adjust') needs to re-snapshot baseData from the new image.
+    // Clearing subTool here forces the `prev !== 'adjust'` branch to run.
+    this.subTool = null;
   },
 
   onKeydown(e) {
+    if (!PE.state.imageData) return;
     if (e.key === 'p' || e.key === 'P') this._setSubTool('warp');
     if (e.key === 'a' || e.key === 'A') this._setSubTool('adjust');
     if (e.key === 'r' || e.key === 'R') this._resetCorners();
-    if (e.key === 'l' || e.key === 'L') this._autoLevels();
   },
 
   onCanvasClick() { /* no-op: Scanner interactions happen via panel + handles */ },
@@ -100,7 +110,7 @@ PE.tools.scanner = {
   // ---------------------------------------------------------------
   _buildPanelHTML() {
     return `
-      <div class="panel-section">
+      <div class="panel-section" data-section="warp">
         <div class="panel-section-title selectable" id="scan-warp-title">
           <i class="fa-solid fa-crop-simple"></i> Crop Region
         </div>
@@ -112,25 +122,23 @@ PE.tools.scanner = {
             <i class="fa-solid fa-vector-square"></i> Rectangle
           </button>
         </div>
-        <div class="panel-hint" id="scan-warp-hint">
-          Drag the four red corners to the edges of the document.
-        </div>
-        <div class="panel-row">
-          <button class="btn-panel" id="scan-reset-corners">
-            <i class="fa-solid fa-rotate-left"></i> Reset Corners
-          </button>
-        </div>
-        <div class="panel-row">
-          <button class="btn-panel btn-action btn-compact" id="scan-apply-warp">
+        <div class="panel-hint" id="scan-warp-hint"></div>
+        <div class="panel-row mk-mode-row">
+          <button class="btn-panel btn-action" id="scan-apply-warp">
             <i class="fa-solid fa-check"></i> <span id="scan-apply-label">Apply Warp</span>
+          </button>
+          <button class="btn-panel btn-icon" id="scan-reset-corners"
+                  title="Reset corners" aria-label="Reset corners">
+            <i class="fa-solid fa-rotate-left"></i>
           </button>
         </div>
       </div>
 
-      <div class="panel-section">
+      <div class="panel-section" data-section="adjust">
         <div class="panel-section-title selectable" id="scan-adjust-title">
           <i class="fa-solid fa-sliders"></i> Adjust
         </div>
+        <div class="panel-hint">Changes apply live as you slide.</div>
         <div class="panel-row">
           <label class="panel-label" for="scan-grayscale" style="cursor:pointer;">Grayscale</label>
           <input type="checkbox" class="panel-checkbox" id="scan-grayscale" ${this.grayscale ? 'checked' : ''}>
@@ -147,29 +155,13 @@ PE.tools.scanner = {
                  min="-100" max="100" value="${this.contrast}">
           <span class="panel-slider-value" id="scan-contrast-val">${this.contrast}</span>
         </div>
-        <div class="panel-row">
-          <span class="panel-label">Threshold</span>
-          <input type="range" class="panel-slider" id="scan-threshold"
-                 min="0" max="255" value="${this.threshold}">
-          <span class="panel-slider-value" id="scan-threshold-val">${this.threshold}</span>
-        </div>
-        <div class="panel-row">
-          <button class="btn-panel" id="scan-auto-levels">
-            <i class="fa-solid fa-magic-wand-sparkles"></i> Auto Levels
-          </button>
-        </div>
-        <div class="panel-row">
-          <button class="btn-panel btn-action btn-compact" id="scan-apply-adjust">
-            <i class="fa-solid fa-check"></i> Apply Adjust
-          </button>
-        </div>
       </div>
     `;
   },
 
   _bindPanelEvents() {
-    document.getElementById('scan-warp-title').addEventListener('click', () => this._setSubTool('warp'));
-    document.getElementById('scan-adjust-title').addEventListener('click', () => this._setSubTool('adjust'));
+    // Sub-tool sections: clicking anywhere in a disabled section activates it.
+    PE.panels.wireSubSections((name) => this._setSubTool(name));
 
     document.querySelectorAll('.scan-selmode-btn').forEach(btn => {
       btn.addEventListener('click', () => this._setSelectMode(btn.dataset.mode));
@@ -179,6 +171,7 @@ PE.tools.scanner = {
     document.getElementById('scan-apply-warp').addEventListener('click', () => this._applyWarp());
 
     document.getElementById('scan-grayscale').addEventListener('change', (e) => {
+      this._pushAdjustUndoOnce();
       this.grayscale = e.target.checked;
       this._renderPreview();
     });
@@ -186,6 +179,7 @@ PE.tools.scanner = {
       const slider = document.getElementById(id);
       const val = document.getElementById(`${id}-val`);
       slider.addEventListener('input', (e) => {
+        this._pushAdjustUndoOnce();
         this[key] = parseInt(e.target.value, 10);
         val.textContent = this[key];
         this._renderPreview();
@@ -193,10 +187,6 @@ PE.tools.scanner = {
     };
     bindSlider('scan-brightness', 'brightness');
     bindSlider('scan-contrast', 'contrast');
-    bindSlider('scan-threshold', 'threshold');
-
-    document.getElementById('scan-auto-levels').addEventListener('click', () => this._autoLevels());
-    document.getElementById('scan-apply-adjust').addEventListener('click', () => this._applyAdjust());
   },
 
   _setSelectMode(mode) {
@@ -229,17 +219,9 @@ PE.tools.scanner = {
   },
 
   _setSubTool(name) {
+    const prev = this.subTool;
     this.subTool = name;
-    const warpTitle = document.getElementById('scan-warp-title');
-    const adjTitle = document.getElementById('scan-adjust-title');
-    if (warpTitle) warpTitle.classList.toggle('active', name === 'warp');
-    if (adjTitle) adjTitle.classList.toggle('active', name === 'adjust');
-
-    // Disable the inactive section's body. See CLAUDE.md - "Sub-tool section disable pattern".
-    const warpSec = warpTitle && warpTitle.closest('.panel-section');
-    const adjSec = adjTitle && adjTitle.closest('.panel-section');
-    if (warpSec) warpSec.classList.toggle('disabled', name !== 'warp');
-    if (adjSec) adjSec.classList.toggle('disabled', name !== 'adjust');
+    PE.panels.setActiveSection(name);
 
     const container = PE.dom.container;
     container.classList.remove('cursor-crosshair');
@@ -249,19 +231,26 @@ PE.tools.scanner = {
       this._showHandles();
     } else {
       this._hideHandles();
-      // Entering adjust: refresh base snapshot from current image and reset sliders
-      if (PE.state.imageData) {
+      // Entering Adjust from somewhere else: snapshot the pre-Adjust state and
+      // reset sliders. The undo entry is deferred to the first real user
+      // interaction (see _pushAdjustUndoOnce) so tabbing through Adjust
+      // without touching a control leaves no no-op Ctrl+Z on the stack.
+      // Exception: entry also triggers _renderPreview, which silently commits
+      // grayscale when it's enabled. If that first render will actually
+      // mutate the image, push undo eagerly so the mutation is reversible.
+      if (PE.state.imageData && prev !== 'adjust') {
         this._snapshotBase();
+        this._adjustUndoPushed = false;
         this.brightness = 0;
         this.contrast = 0;
-        this.threshold = 0;
         const bEl = document.getElementById('scan-brightness');
         const cEl = document.getElementById('scan-contrast');
-        const tEl = document.getElementById('scan-threshold');
         if (bEl) { bEl.value = 0; document.getElementById('scan-brightness-val').textContent = '0'; }
         if (cEl) { cEl.value = 0; document.getElementById('scan-contrast-val').textContent = '0'; }
-        if (tEl) { tEl.value = 0; document.getElementById('scan-threshold-val').textContent = '0'; }
-        // Apply grayscale immediately if enabled
+        // With brightness=0 and contrast=0, _renderPreview is an identity
+        // transform unless grayscale is on. Push undo before the mutation in
+        // that case; otherwise leave the snapshot for the first user action.
+        if (this.grayscale) this._pushAdjustUndoOnce();
         this._renderPreview();
       }
     }
@@ -327,6 +316,9 @@ PE.tools.scanner = {
       this._transformHook = null;
     }
     this._detachDragListeners();
+    // Drop stale drag index so a buffered pointer event after teardown can't
+    // mutate corners that no longer have a visible handle.
+    this._dragging = -1;
   },
 
   _repositionHandles() {
@@ -490,9 +482,21 @@ PE.tools.scanner = {
     PE.file._updateImageInfo();
     this._resetCorners();
     const verb = this.selectMode === 'rectangle' ? 'Crop' : 'Warp';
-    PE.log.success(`${verb} applied (${outW} x ${outH})`);
-    // Automatically move on to Adjust mode once the region is confirmed.
+    PE.log.success(`${verb} applied — switched to Adjust`);
+    // Automatically move on to Adjust mode once the region is confirmed, and
+    // flash the first Adjust row so the user sees the panel change. Adjust
+    // manages its own lazy undo snapshot from the post-warp image, so Ctrl+Z
+    // can revert an Adjust session first and the Warp on the next undo —
+    // with no no-op entry if the user never touches the controls.
     this._setSubTool('adjust');
+    const firstRow = document.querySelector(
+      '#left-panel .panel-section[data-section="adjust"] .panel-row'
+    );
+    if (firstRow) {
+      firstRow.classList.remove('flash');
+      void firstRow.offsetWidth; // restart animation
+      firstRow.classList.add('flash');
+    }
   },
 
   /**
@@ -546,6 +550,24 @@ PE.tools.scanner = {
     );
   },
 
+  /**
+   * Lazy undo snapshot for the current Adjust session. Pushes baseData (the
+   * pristine pre-adjust state captured on section entry) onto the global
+   * undo stack the first time it runs in a given session, and marks the
+   * session as pushed so subsequent calls are no-ops. `_adjustUndoPushed`
+   * starts false when entering Adjust; the entry path calls this method
+   * eagerly when grayscale is on (because the entry render mutates pixels),
+   * otherwise it stays lazy until the first slider / checkbox interaction.
+   */
+  _pushAdjustUndoOnce() {
+    if (this._adjustUndoPushed) return;
+    if (!PE.state.imageData || !this.baseData) return;
+    // Delegate stack push / trim / redo-clear / UI refresh to the shared
+    // helper so any future tweak to the undo contract stays in one place.
+    PE.history.pushSnapshot(this.baseData);
+    this._adjustUndoPushed = true;
+  },
+
   _renderPreview() {
     const s = PE.state;
     if (!this.baseData || !s.imageData) return;
@@ -557,7 +579,6 @@ PE.tools.scanner = {
     const c = this.contrast;
     const cf = (259 * (c + 255)) / (255 * (259 - c));
     const b = this.brightness;
-    const th = this.threshold;
     const gray = this.grayscale;
 
     for (let i = 0; i < len; i += 4) {
@@ -570,84 +591,11 @@ PE.tools.scanner = {
       r = cf * (r - 128) + 128 + b;
       g = cf * (g - 128) + 128 + b;
       bl = cf * (bl - 128) + 128 + b;
-      // Threshold (binarize by luminance)
-      if (th > 0) {
-        const y = 0.299 * r + 0.587 * g + 0.114 * bl;
-        const v = y > th ? 255 : 0;
-        r = g = bl = v;
-      }
       dst[i]     = Math.max(0, Math.min(255, r));
       dst[i + 1] = Math.max(0, Math.min(255, g));
       dst[i + 2] = Math.max(0, Math.min(255, bl));
       dst[i + 3] = src[i + 3];
     }
     PE.dom.mainCtx.putImageData(s.imageData, 0, 0);
-  },
-
-  _autoLevels() {
-    if (!this.baseData) {
-      PE.log.warn('No image loaded');
-      return;
-    }
-    // Build luminance histogram from baseData
-    const d = this.baseData.data;
-    const hist = new Uint32Array(256);
-    let total = 0;
-    for (let i = 0; i < d.length; i += 4) {
-      const y = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
-      hist[y]++;
-      total++;
-    }
-    // 1% and 99% percentile
-    const lowCut = total * 0.01;
-    const highCut = total * 0.99;
-    let acc = 0, lo = 0, hi = 255;
-    for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= lowCut) { lo = v; break; } }
-    acc = 0;
-    for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= highCut) { hi = v; break; } }
-    if (hi - lo < 2) {
-      PE.log.warn('Auto Levels: image has no usable range');
-      return;
-    }
-    // Stretch baseData in place
-    const scale = 255 / (hi - lo);
-    for (let i = 0; i < d.length; i += 4) {
-      for (let k = 0; k < 3; k++) {
-        const v = (d[i + k] - lo) * scale;
-        d[i + k] = Math.max(0, Math.min(255, Math.round(v)));
-      }
-    }
-    this._renderPreview();
-    PE.log.success(`Auto Levels applied (${lo}..${hi})`);
-  },
-
-  _applyAdjust() {
-    const s = PE.state;
-    if (!s.imageData || !this.baseData) {
-      PE.log.warn('No image loaded');
-      return;
-    }
-    // baseData is pre-adjust snapshot; push it to undo so Ctrl+Z reverts fully.
-    const prev = new ImageData(
-      new Uint8ClampedArray(this.baseData.data),
-      s.imgWidth, s.imgHeight
-    );
-    s.undoStack.push(prev);
-    if (s.undoStack.length > PE.MAX_UNDO) s.undoStack.shift();
-    s.redoStack = [];
-    PE.history.updateUI();
-
-    // Main canvas already shows current preview; lock it in as the new base.
-    this._snapshotBase();
-    this.brightness = 0;
-    this.contrast = 0;
-    this.threshold = 0;
-    const bEl = document.getElementById('scan-brightness');
-    const cEl = document.getElementById('scan-contrast');
-    const tEl = document.getElementById('scan-threshold');
-    if (bEl) { bEl.value = 0; document.getElementById('scan-brightness-val').textContent = '0'; }
-    if (cEl) { cEl.value = 0; document.getElementById('scan-contrast-val').textContent = '0'; }
-    if (tEl) { tEl.value = 0; document.getElementById('scan-threshold-val').textContent = '0'; }
-    PE.log.success('Adjustments applied');
   },
 };

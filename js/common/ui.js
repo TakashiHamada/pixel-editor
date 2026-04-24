@@ -184,6 +184,81 @@ PE.overlay = {
   },
 };
 
+/* --- Panel helpers (shared across tools) --- */
+PE.panels = {
+  /**
+   * Wire every `.panel-section[data-section]` currently in the DOM so that a
+   * click anywhere inside a disabled section activates it. The active section
+   * absorbs clicks in its controls as usual. Tools call this once from their
+   * _bindPanelEvents after building the panel HTML, passing a setter that
+   * switches the active sub-section by name.
+   *
+   * Because `.panel-section.disabled > *` has `pointer-events: none`, every
+   * click inside a disabled section lands on the section container itself, so
+   * a single listener per section is enough.
+   */
+  wireSubSections(setter) {
+    document.querySelectorAll('#left-panel .panel-section[data-section]').forEach(el => {
+      const activate = () => {
+        if (!el.classList.contains('disabled')) return;
+        setter(el.dataset.section);
+      };
+      el.addEventListener('click', activate);
+      // Keyboard parity: Tab onto a disabled section (role=button, tabindex=0
+      // managed by the tool when toggling .disabled) and press Enter/Space.
+      // Stop propagation so Space doesn't also trigger PE.zoom's global
+      // Space-to-pan handler.
+      el.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        if (!el.classList.contains('disabled')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        activate();
+      });
+    });
+  },
+
+  /**
+   * Toggle the `.disabled` class on every registered sub-section so only the
+   * named one is active, and manage tabindex/role/aria so disabled sections
+   * are keyboard-reachable "activate me" targets while their descendant
+   * controls are removed from the tab order. CSS `pointer-events: none`
+   * handles mouse; this function handles keyboard. Tools call this from
+   * their section setter after running the tool-specific activation work.
+   */
+  setActiveSection(activeName) {
+    const focusableSel = 'input, button, select, textarea, a[href], [contenteditable]';
+    document.querySelectorAll('#left-panel .panel-section[data-section]').forEach(el => {
+      const isActive = el.dataset.section === activeName;
+      el.classList.toggle('disabled', !isActive);
+
+      // Section container: focusable "Activate me" target when disabled,
+      // plain container when active.
+      if (isActive) {
+        el.removeAttribute('role');
+        el.removeAttribute('tabindex');
+        el.removeAttribute('aria-label');
+      } else {
+        el.setAttribute('role', 'button');
+        el.setAttribute('tabindex', '0');
+        const title = el.querySelector('.panel-section-title');
+        if (title) el.setAttribute('aria-label', `Activate ${title.textContent.trim()}`);
+      }
+
+      // Descendant controls: drop out of the tab order when disabled, restore
+      // when active. Tools in this codebase don't set custom tabindex values,
+      // so removeAttribute returns children to their intrinsic focusability.
+      el.querySelectorAll(focusableSel).forEach(ctrl => {
+        if (isActive) ctrl.removeAttribute('tabindex');
+        else ctrl.setAttribute('tabindex', '-1');
+      });
+
+      const title = el.querySelector('.panel-section-title');
+      if (title) title.classList.toggle('active', isActive);
+    });
+  },
+};
+
 /* --- Loading spinner (delayed to avoid flicker on fast operations) --- */
 PE.loading = {
   _timer: null,

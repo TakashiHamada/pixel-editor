@@ -78,6 +78,7 @@ PE.tools.transparency = {
    * Handle tool-specific keyboard shortcuts.
    */
   onKeydown(e) {
+    if (!PE.state.imageData) return;
     if (e.key === 'e' || e.key === 'E') this._setSubTool('eyedropper');
     if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey) {
       this._setSubTool('select');
@@ -119,7 +120,7 @@ PE.tools.transparency = {
   // ---- Panel HTML ----
   _buildPanelHTML() {
     return `
-      <div class="panel-section">
+      <div class="panel-section" data-section="eyedropper">
         <div class="panel-section-title selectable" id="tool-eyedropper">
           <i class="fa-solid fa-eye-dropper"></i> Extract Background Color
         </div>
@@ -130,7 +131,7 @@ PE.tools.transparency = {
         </div>
       </div>
 
-      <div class="panel-section">
+      <div class="panel-section" data-section="select">
         <div class="panel-section-title selectable" id="tool-select">
           <i class="fa-solid fa-vector-square"></i> Select Region
         </div>
@@ -158,13 +159,8 @@ PE.tools.transparency = {
   _bindPanelEvents() {
     const self = this;
 
-    // Sub-tool buttons
-    document.getElementById('tool-eyedropper').addEventListener('click', () => {
-      self._setSubTool('eyedropper');
-    });
-    document.getElementById('tool-select').addEventListener('click', () => {
-      self._setSubTool('select');
-    });
+    // Sub-tool sections: clicking anywhere in a disabled section activates it.
+    PE.panels.wireSubSections((name) => self._setSubTool(name));
 
     // Sliders
     document.getElementById('tool-tolerance').addEventListener('input', (e) => {
@@ -186,26 +182,12 @@ PE.tools.transparency = {
     this.subTool = name;
     const container = PE.dom.container;
     container.classList.remove('cursor-crosshair', 'cursor-eyedropper');
-
-    const eyeTitle = document.getElementById('tool-eyedropper');
-    const selTitle = document.getElementById('tool-select');
-
-    if (name === 'eyedropper') {
-      container.classList.add('cursor-eyedropper');
-      if (eyeTitle) eyeTitle.classList.add('active');
-      if (selTitle) selTitle.classList.remove('active');
-    } else {
-      container.classList.add('cursor-crosshair');
-      if (selTitle) selTitle.classList.add('active');
-      if (eyeTitle) eyeTitle.classList.remove('active');
+    // Preview mode (no image) leaves the native cursor alone — the locked
+    // panel makes the canvas inert, so there's no tool cursor to show yet.
+    if (PE.state.imageData) {
+      container.classList.add(name === 'eyedropper' ? 'cursor-eyedropper' : 'cursor-crosshair');
     }
-
-    // Disable the inactive section's body (sliders / buttons) while keeping
-    // its title clickable. See CLAUDE.md - "Sub-tool section disable pattern".
-    const eyeSec = eyeTitle && eyeTitle.closest('.panel-section');
-    const selSec = selTitle && selTitle.closest('.panel-section');
-    if (eyeSec) eyeSec.classList.toggle('disabled', name !== 'eyedropper');
-    if (selSec) selSec.classList.toggle('disabled', name !== 'select');
+    PE.panels.setActiveSection(name);
   },
 
   _updateColorDisplay() {

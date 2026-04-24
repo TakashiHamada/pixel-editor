@@ -106,10 +106,38 @@ body {
   cursor: default;
 }
 
+/* Keyboard focus ring for interactive controls. Mouse clicks never trigger
+   :focus-visible, so this only appears when the user tabs to something. */
+.btn:focus-visible,
+.btn-panel:focus-visible,
+.panel-slider:focus-visible,
+.panel-section.disabled:focus-visible {
+  outline: 2px solid var(--accent-active);
+  outline-offset: 1px;
+}
+
 .btn i {
   font-size: 13px;
   width: 14px;
   text-align: center;
+}
+
+/* Open button pulsing glow: only runs while no image is loaded
+   (the Open button becomes :disabled once an image is open). */
+#btn-open:not(:disabled) {
+  animation: open-pulse 1.8s ease-in-out infinite;
+  border-color: var(--accent);
+}
+
+@keyframes open-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+    border-color: var(--accent);
+  }
+  50% {
+    box-shadow: 0 0 10px 2px var(--accent-glow);
+    border-color: var(--accent-active);
+  }
 }
 
 /* Tool selector buttons in center */
@@ -137,13 +165,6 @@ body {
   height: 20px;
   background: var(--border-color);
   margin: 0 4px;
-}
-
-/* Commit time display */
-#commit-time {
-  font-size: 11px;
-  color: var(--text-secondary);
-  font-family: monospace;
 }
 
 /* --- Main Content Area (panel + canvas) --- */
@@ -234,12 +255,26 @@ body {
   color: #fff;
 }
 
-/* When a sub-tool section is not the active mode, dim and disable its body
-   (sliders, buttons, inputs). The title stays interactive so the user can
-   still click it to switch modes. Applied per tool via a `.disabled` class. */
+/* When a sub-tool section is not the active mode, the entire section turns
+   into a single "click to activate" target. Children don't receive pointer
+   events so a click anywhere inside the section — title, slider track, label,
+   empty padding — bubbles up to the section's own click handler (wired via
+   PE.panels.wireSubSections). A subtle hover tint hints this is clickable. */
+.panel-section.disabled {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.panel-section.disabled:hover {
+  background: var(--bg-medium);
+}
+.panel-section.disabled > * {
+  pointer-events: none;
+}
 .panel-section.disabled > :not(.panel-section-title) {
   opacity: 0.4;
-  pointer-events: none;
+}
+.panel-section.disabled > .panel-section-title {
+  opacity: 0.7;
 }
 
 /* Panel Row */
@@ -254,8 +289,10 @@ body {
   margin-bottom: 0;
 }
 
+/* macOS-style double blink: snap on/off twice, no fade. `steps(1, end)`
+   makes each segment a single hold — no gradient between keyframes. */
 .panel-row.flash {
-  animation: row-flash 0.25s ease-out;
+  animation: row-flash 0.25s steps(1, end);
 }
 
 @keyframes row-flash {
@@ -292,7 +329,8 @@ body {
   border-radius: 50%;
   background: var(--accent-active);
   cursor: pointer;
-  border: 2px solid #ddd;
+  border: 1px solid var(--bg-dark);
+  box-shadow: 0 0 0 1px var(--accent-active);
 }
 
 .panel-slider::-moz-range-thumb {
@@ -301,15 +339,20 @@ body {
   border-radius: 50%;
   background: var(--accent-active);
   cursor: pointer;
-  border: 2px solid #ddd;
+  border: 1px solid var(--bg-dark);
+  box-shadow: 0 0 0 1px var(--accent-active);
 }
 
+/* Shared across every tool's slider rows. Width must fit the widest value
+   any tool can show (currently "-100" from Scanner's signed adjusts), so
+   3-digit Marker sizes (up to 120) never overflow. Keep flex-shrink: 0
+   so the value cell never compresses when the slider fills the row. */
 .panel-slider-value {
   font-size: 11px;
   font-family: monospace;
   color: var(--text-primary);
-  width: 28px;
-  min-width: 28px;
+  width: 36px;
+  min-width: 36px;
   text-align: left;
   flex-shrink: 0;
   padding-left: 2px;
@@ -865,21 +908,20 @@ body {
 
 .layer-spacer { flex: 1; }
 
-/* --- Marker: brush mode buttons (side-by-side) --- */
+/* --- Side-by-side button row (e.g. Scanner Apply/Reset, mode toggles) --- */
 .mk-mode-row {
   gap: 6px;
 }
-
-.mk-mode-btn {
+/* Buttons in a side-by-side row share the width equally by default. */
+.mk-mode-row > .btn-panel {
   flex: 1;
-  padding: 7px 6px;
-  font-size: 11px;
 }
-
-.mk-mode-btn.active {
-  background: var(--accent);
-  border-color: var(--accent-active);
-  color: #fff;
+/* Icon-only button: fixed narrow square, does not flex-grow. Place after
+   the sibling rule above so source-order beats its equal specificity. */
+.btn-panel.btn-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  padding: 9px 0;
 }
 
 /* --- Scanner: selection mode buttons (reuse mk-mode-row layout) --- */

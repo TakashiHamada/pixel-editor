@@ -39,6 +39,20 @@ PE.activateTool = function(toolId) {
   // Deactivate current tool
   if (current) current.deactivate();
 
+  // Strip every tool-cursor class from the canvas container so no class from
+  // the previous tool can leak into the next one. Tools re-add whichever
+  // class they need inside activate() / _setSubTool(). Preserve `cursor-pan`
+  // if Space is currently held — PE.zoom only adds that class on the initial
+  // keydown, so a tool switch mid-hold would otherwise leave pan mode active
+  // but without the grab cursor until the user lifts and re-presses Space.
+  if (PE.dom.container) {
+    const preservePan = !!(PE.zoom && PE.zoom.spaceDown);
+    const cursorClasses = Array.from(PE.dom.container.classList).filter(
+      c => c.startsWith('cursor-') && !(preservePan && c === 'cursor-pan')
+    );
+    if (cursorClasses.length) PE.dom.container.classList.remove(...cursorClasses);
+  }
+
   // Update menu bar buttons
   document.querySelectorAll('.btn-tool').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.toolId === toolId);

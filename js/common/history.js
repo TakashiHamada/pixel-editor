@@ -6,25 +6,34 @@ window.PE = window.PE || {};
 
 PE.history = {
   /**
+   * Push an arbitrary ImageData snapshot onto the undo stack, applying the
+   * global MAX_UNDO trim, clearing redo, and refreshing the status bar.
+   * The snapshot's pixel buffer is cloned so future mutations to the caller's
+   * ImageData can't rewrite history. Tools that need to push something other
+   * than "the current s.imageData" (e.g. Scanner's deferred pre-Adjust snap)
+   * call this directly; pushUndo() is the convenience wrapper for the common
+   * "snapshot the current image" case.
+   */
+  pushSnapshot(imageData) {
+    const s = PE.state;
+    if (!imageData) return;
+    const copy = new ImageData(
+      new Uint8ClampedArray(imageData.data),
+      imageData.width,
+      imageData.height
+    );
+    s.undoStack.push(copy);
+    if (s.undoStack.length > PE.MAX_UNDO) s.undoStack.shift();
+    s.redoStack = [];
+    PE.history.updateUI();
+  },
+
+  /**
    * Push current imageData onto undo stack (before making changes).
    * Clears redo stack since a new action invalidates redo history.
    */
   pushUndo() {
-    const s = PE.state;
-    if (!s.imageData) return;
-
-    const copy = new ImageData(
-      new Uint8ClampedArray(s.imageData.data),
-      s.imgWidth,
-      s.imgHeight
-    );
-    s.undoStack.push(copy);
-    if (s.undoStack.length > PE.MAX_UNDO) {
-      s.undoStack.shift();
-    }
-    // New action clears redo
-    s.redoStack = [];
-    PE.history.updateUI();
+    PE.history.pushSnapshot(PE.state.imageData);
   },
 
   /**
