@@ -38,7 +38,7 @@ Parameters:
 Clean up photographed or scanned pencil sketches (JPEG export):
 
 1. **Crop Region** — drag the four red corner handles to the true corners of the page (Perspective mode) or snap them to an axis-aligned rectangle (Rectangle mode). **Apply Warp** / **Apply Crop** rectifies the selection; **Reset** puts the corners back at the image bounds.
-2. **Adjust** — live Brightness (−100..100) and Contrast (−100..100). Changes apply as you slide; one undo entry per Adjust session reverts the whole pass.
+2. **Adjust** — optional Grayscale toggle (off by default, preserving color), plus live Brightness (−100..100) and Contrast (−100..100). Changes apply as you slide; one undo entry per Adjust session reverts the whole pass.
 
 ### Marker Tool
 Paint a photographed pencil sketch with translucent markers (JPEG export). The pencil layer is tintable; each color lives on its own layer composited via multiply.

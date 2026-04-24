@@ -4,8 +4,9 @@
    Workflow:
    1. Perspective & Crop: drag 4 corner handles to the true corners
       of the sketched document; Apply Warp rectifies it.
-   2. Adjust: brightness / contrast sliders with live preview that
-      is committed immediately (one undo entry per Adjust session).
+   2. Adjust: optional grayscale conversion + brightness / contrast
+      sliders with live preview that is committed immediately
+      (one undo entry per Adjust session).
 
    Exports as JPEG.
    ============================================================ */
@@ -21,7 +22,9 @@ PE.tools.scanner = {
 
   description: 'Clean up photographed or scanned sketches. Drag the four corner handles '
     + 'to the corners of the page to remove perspective distortion, then adjust '
-    + 'brightness and contrast for a clean result. Adjust changes apply as you slide.',
+    + 'brightness and contrast for a clean result. Color is preserved by default; '
+    + 'toggle Grayscale in Adjust to convert to monochrome. Adjust changes apply as '
+    + 'you slide.',
 
   getShortcutsHTML() {
     return `
@@ -42,6 +45,7 @@ PE.tools.scanner = {
   selectMode: 'perspective',// 'perspective' | 'rectangle'
   corners: null,            // [{x,y}, ...] in image coords (TL, TR, BR, BL)
   baseData: null,           // ImageData snapshot used as adjust source
+  grayscale: false,         // Off by default so Apply Warp preserves color
   brightness: 0,
   contrast: 0,
 
@@ -62,7 +66,8 @@ PE.tools.scanner = {
     // Force _setSubTool to treat this as a fresh entry (so Adjust re-snapshots
     // baseData and resets sliders even when the saved subTool was already
     // 'adjust'). The Adjust-session undo snapshot is pushed lazily from
-    // _pushAdjustUndoOnce on the first control change.
+    // _pushAdjustUndoOnce on the first control change (or eagerly on entry
+    // when grayscale is already enabled — see _setSubTool for the full flow).
     const initial = this.subTool || 'warp';
     this.subTool = null;
     this._setSubTool(initial);
@@ -75,7 +80,9 @@ PE.tools.scanner = {
     panel.innerHTML = '';
     // Adjust changes are already committed to s.imageData live. The Adjust
     // session's single undo entry (pushed lazily on the first control
-    // interaction) is enough to revert the whole session on Ctrl+Z.
+    // interaction, or eagerly on entry if grayscale was already on and the
+    // entry render mutates pixels) is enough to revert the whole session on
+    // Ctrl+Z.
   },
 
   /**
@@ -136,6 +143,10 @@ PE.tools.scanner = {
         </div>
         <div class="panel-hint">Changes apply live as you slide.</div>
         <div class="panel-row">
+          <label class="panel-label" for="scan-grayscale" style="cursor:pointer;">Grayscale</label>
+          <input type="checkbox" class="panel-checkbox" id="scan-grayscale" ${this.grayscale ? 'checked' : ''}>
+        </div>
+        <div class="panel-row">
           <span class="panel-label">Brightness</span>
           <input type="range" class="panel-slider" id="scan-brightness"
                  min="-100" max="100" value="${this.brightness}">
@@ -162,6 +173,11 @@ PE.tools.scanner = {
     document.getElementById('scan-reset-corners').addEventListener('click', () => this._resetCorners());
     document.getElementById('scan-apply-warp').addEventListener('click', () => this._applyWarp());
 
+    document.getElementById('scan-grayscale').addEventListener('change', (e) => {
+      this._pushAdjustUndoOnce();
+      this.grayscale = e.target.checked;
+      this._renderPreview();
+    });
     const bindSlider = (id, key) => {
       const slider = document.getElementById(id);
       const val = document.getElementById(`${id}-val`);
@@ -222,8 +238,10 @@ PE.tools.scanner = {
       // reset sliders. The undo entry is deferred to the first real user
       // interaction (see _pushAdjustUndoOnce) so tabbing through Adjust
       // without touching a control leaves no no-op Ctrl+Z on the stack.
-      // With brightness=0 and contrast=0, the initial preview is an identity
-      // transform so no eager undo push is needed.
+      // Exception: grayscale persists across sessions, so if it's still on
+      // when we re-enter Adjust (e.g. after a second Apply Warp), the initial
+      // render will mutate the pixels. Push undo eagerly in that case so the
+      // conversion is reversible.
       if (PE.state.imageData && prev !== 'adjust') {
         this._snapshotBase();
         this._adjustUndoPushed = false;
@@ -233,6 +251,7 @@ PE.tools.scanner = {
         const cEl = document.getElementById('scan-contrast');
         if (bEl) { bEl.value = 0; document.getElementById('scan-brightness-val').textContent = '0'; }
         if (cEl) { cEl.value = 0; document.getElementById('scan-contrast-val').textContent = '0'; }
+        if (this.grayscale) this._pushAdjustUndoOnce();
         this._renderPreview();
       }
     }
@@ -537,8 +556,9 @@ PE.tools.scanner = {
    * pristine pre-adjust state captured on section entry) onto the global
    * undo stack the first time it runs in a given session, and marks the
    * session as pushed so subsequent calls are no-ops. `_adjustUndoPushed`
-   * starts false when entering Adjust and stays that way until the first
-   * slider interaction.
+   * starts false when entering Adjust; the entry path calls this method
+   * eagerly when grayscale is on (because the entry render mutates pixels),
+   * otherwise it stays lazy until the first slider / checkbox interaction.
    */
   _pushAdjustUndoOnce() {
     if (this._adjustUndoPushed) return;
@@ -560,11 +580,18 @@ PE.tools.scanner = {
     const c = this.contrast;
     const cf = (259 * (c + 255)) / (255 * (259 - c));
     const b = this.brightness;
+    const gray = this.grayscale;
 
     for (let i = 0; i < len; i += 4) {
-      let r = cf * (src[i]     - 128) + 128 + b;
-      let g = cf * (src[i + 1] - 128) + 128 + b;
-      let bl = cf * (src[i + 2] - 128) + 128 + b;
+      let r = src[i], g = src[i + 1], bl = src[i + 2];
+      if (gray) {
+        const y = 0.299 * r + 0.587 * g + 0.114 * bl;
+        r = g = bl = y;
+      }
+      // Brightness + contrast
+      r = cf * (r - 128) + 128 + b;
+      g = cf * (g - 128) + 128 + b;
+      bl = cf * (bl - 128) + 128 + b;
       dst[i]     = Math.max(0, Math.min(255, r));
       dst[i + 1] = Math.max(0, Math.min(255, g));
       dst[i + 2] = Math.max(0, Math.min(255, bl));
