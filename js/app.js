@@ -7,6 +7,29 @@
 window.PE = window.PE || {};
 
 // ============================================================
+// App-level helpers
+// ============================================================
+PE.app = {
+  /**
+   * True if a keystroke should be consumed by the focused element instead of
+   * dispatched as an app shortcut. The codebase only uses sliders, checkboxes,
+   * color pickers, and buttons — none of which accept typed characters — so we
+   * only bail on genuine text-entry targets.
+   */
+  _isTypingTarget(el) {
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    const tag = el.tagName;
+    if (tag === 'TEXTAREA') return true;
+    if (tag !== 'INPUT') return false;
+    const type = (el.type || 'text').toLowerCase();
+    return type === 'text' || type === 'search' || type === 'url'
+        || type === 'tel'  || type === 'email'  || type === 'password'
+        || type === 'number';
+  },
+};
+
+// ============================================================
 // Tool Registry
 // ============================================================
 PE.toolRegistry = {};
@@ -135,8 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
-    // Don't capture if typing in an input
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    // Only bail on typing inputs. Non-typing controls (range, checkbox,
+    // color, etc.) keep focus after a mouse interaction — if we blocked every
+    // <input>, Ctrl+Z after nudging a slider would silently no-op.
+    if (PE.app._isTypingTarget(e.target)) return;
 
     // Undo: Ctrl+Z
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
