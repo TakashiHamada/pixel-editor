@@ -5,6 +5,7 @@
    1. Extract background color (eyedropper)
    2. Select region (flood fill with tolerance + border expansion)
    3. Make transparent (remove background color)
+   4. Eraser: paint pixels to alpha 0 directly (manual cleanup)
 
    Supports Shift+click for additive selection.
    ============================================================ */
@@ -20,7 +21,8 @@ PE.tools.transparency = {
 
   description: 'Remove background colors from sprites and game assets. '
     + 'Extract a background color with the eyedropper, select a region by flood-fill, '
-    + 'then apply transparency. Supports tolerance and border feathering for clean edges.',
+    + 'then apply transparency. Or use the Eraser sub-tool to paint pixels transparent '
+    + 'by hand. Supports tolerance and border feathering for clean edges.',
 
   /**
    * Return HTML for the right column of the shortcuts modal.
@@ -34,6 +36,8 @@ PE.tools.transparency = {
       <ul class="shortcut-list">
         <li><span class="shortcut-desc">Eyedropper mode</span> <span class="shortcut-key">E</span></li>
         <li><span class="shortcut-desc">Select mode</span> <span class="shortcut-key">S</span></li>
+        <li><span class="shortcut-desc">Eraser mode</span> <span class="shortcut-key">R</span></li>
+        <li><span class="shortcut-desc">Eraser size</span> <span class="shortcut-key">[ / ]</span></li>
         <li><span class="shortcut-desc">Add to selection</span> <span class="shortcut-key">Shift + Click</span></li>
         <li><span class="shortcut-desc">Make transparent</span> <span class="shortcut-key">Delete</span></li>
       </ul>
@@ -44,7 +48,25 @@ PE.tools.transparency = {
   bgColor: null,
   tolerance: 32,
   borderRadius: 4,
-  subTool: 'eyedropper', // 'eyedropper' | 'select'
+  eraserSize: 24,
+  subTool: 'eyedropper', // 'eyedropper' | 'select' | 'eraser'
+
+  // Ephemeral eraser state
+  _drawing: false,
+  _lastX: 0,
+  _lastY: 0,
+
+  // Listener references for clean teardown in deactivate
+  _onPointerDown: null,
+  _onPointerMove: null,
+  _onPointerUp: null,
+  _onPointerEnter: null,
+  _onPointerLeave: null,
+  _onZoomChange: null,
+
+  // DOM circle that previews the eraser stroke (reuses .marker-cursor styles)
+  _cursorEl: null,
+  _hovering: false,
 
   /**
    * Called when this tool is activated.
@@ -55,6 +77,31 @@ PE.tools.transparency = {
     panel.classList.add('visible');
     this._bindPanelEvents();
     this._updateColorDisplay();
+
+    // Eraser plumbing: pointer events for click-drag erasing, plus a DOM
+    // brush-size preview that tracks the cursor and scales with zoom.
+    const container = PE.dom.container;
+    this._onPointerDown  = (e) => this._handlePointerDown(e);
+    this._onPointerMove  = (e) => this._handlePointerMove(e);
+    this._onPointerUp    = (e) => this._handlePointerUp(e);
+    this._onPointerEnter = () => {
+      this._hovering = true;
+      if (this.subTool === 'eraser') this._showCursor();
+    };
+    this._onPointerLeave = () => {
+      this._hovering = false;
+      this._hideCursor();
+    };
+    container.addEventListener('pointerdown',  this._onPointerDown);
+    window.addEventListener('pointermove',     this._onPointerMove);
+    window.addEventListener('pointerup',       this._onPointerUp);
+    container.addEventListener('pointerenter', this._onPointerEnter);
+    container.addEventListener('pointerleave', this._onPointerLeave);
+
+    this._createCursor();
+    this._onZoomChange = () => this._updateCursorSize();
+    PE.zoom.transformListeners.push(this._onZoomChange);
+
     this._setSubTool(this.subTool);
   },
 
@@ -62,9 +109,42 @@ PE.tools.transparency = {
    * Called when this tool is deactivated.
    */
   deactivate() {
+    const container = PE.dom.container;
+
+    // If we're mid-stroke when the user switches tools, commit what we drew so
+    // the next tool sees the erased pixels.
+    if (this._drawing) {
+      this._drawing = false;
+      this._syncImageData();
+    }
+
+    if (this._onPointerDown)  container.removeEventListener('pointerdown',  this._onPointerDown);
+    if (this._onPointerMove)  window.removeEventListener('pointermove',     this._onPointerMove);
+    if (this._onPointerUp)    window.removeEventListener('pointerup',       this._onPointerUp);
+    if (this._onPointerEnter) container.removeEventListener('pointerenter', this._onPointerEnter);
+    if (this._onPointerLeave) container.removeEventListener('pointerleave', this._onPointerLeave);
+    this._onPointerDown = this._onPointerMove = this._onPointerUp = null;
+    this._onPointerEnter = this._onPointerLeave = null;
+
+    if (this._onZoomChange) {
+      const idx = PE.zoom.transformListeners.indexOf(this._onZoomChange);
+      if (idx >= 0) PE.zoom.transformListeners.splice(idx, 1);
+      this._onZoomChange = null;
+    }
+    this._destroyCursor();
+
     const panel = document.getElementById('left-panel');
     panel.classList.remove('visible');
     panel.innerHTML = '';
+  },
+
+  /**
+   * Called by file.close() before the image is cleared. Drop any in-flight
+   * stroke and hide the brush preview so it doesn't linger over the empty canvas.
+   */
+  onImageClose() {
+    this._drawing = false;
+    this._hideCursor();
   },
 
   /**
@@ -79,9 +159,13 @@ PE.tools.transparency = {
    */
   onKeydown(e) {
     if (!PE.state.imageData) return;
+    if (e.ctrlKey || e.metaKey) return;
     if (e.key === 'e' || e.key === 'E') this._setSubTool('eyedropper');
-    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey) {
-      this._setSubTool('select');
+    if (e.key === 's' || e.key === 'S') this._setSubTool('select');
+    if (e.key === 'r' || e.key === 'R') this._setSubTool('eraser');
+    if (this.subTool === 'eraser') {
+      if (e.key === '[') this._adjustEraserSize(-2);
+      if (e.key === ']') this._adjustEraserSize(+2);
     }
   },
 
@@ -153,6 +237,18 @@ PE.tools.transparency = {
           </button>
         </div>
       </div>
+
+      <div class="panel-section" data-section="eraser">
+        <div class="panel-section-title selectable" id="tool-eraser">
+          <i class="fa-solid fa-eraser"></i> Eraser
+        </div>
+        <div class="panel-row">
+          <span class="panel-label">Size</span>
+          <input type="range" class="panel-slider" id="tool-eraser-size"
+                 min="1" max="120" value="${this.eraserSize}">
+          <span class="panel-slider-value" id="tool-eraser-size-val">${this.eraserSize}</span>
+        </div>
+      </div>
     `;
   },
 
@@ -176,18 +272,50 @@ PE.tools.transparency = {
     document.getElementById('tool-make-transparent').addEventListener('click', () => {
       self._makeTransparent();
     });
+
+    // Eraser size slider
+    const eraserSizeEl = document.getElementById('tool-eraser-size');
+    const eraserSizeVal = document.getElementById('tool-eraser-size-val');
+    if (eraserSizeEl) {
+      eraserSizeEl.addEventListener('input', (e) => {
+        self.eraserSize = parseInt(e.target.value, 10);
+        if (eraserSizeVal) eraserSizeVal.textContent = self.eraserSize;
+        if (self.subTool === 'eraser') self._updateCursorSize();
+      });
+    }
   },
 
   _setSubTool(name) {
     this.subTool = name;
     const container = PE.dom.container;
-    container.classList.remove('cursor-crosshair', 'cursor-eyedropper');
+    container.classList.remove('cursor-crosshair', 'cursor-eyedropper', 'cursor-brush');
     // Preview mode (no image) leaves the native cursor alone — the locked
     // panel makes the canvas inert, so there's no tool cursor to show yet.
     if (PE.state.imageData) {
-      container.classList.add(name === 'eyedropper' ? 'cursor-eyedropper' : 'cursor-crosshair');
+      if (name === 'eyedropper') {
+        container.classList.add('cursor-eyedropper');
+      } else if (name === 'select') {
+        container.classList.add('cursor-crosshair');
+      } else if (name === 'eraser') {
+        container.classList.add('cursor-brush');
+      }
+    }
+    if (name === 'eraser') {
+      this._updateCursorSize();
+      if (this._hovering) this._showCursor();
+    } else {
+      this._hideCursor();
     }
     PE.panels.setActiveSection(name);
+  },
+
+  _adjustEraserSize(delta) {
+    this.eraserSize = Math.max(1, Math.min(120, this.eraserSize + delta));
+    const sizeEl = document.getElementById('tool-eraser-size');
+    const sizeVal = document.getElementById('tool-eraser-size-val');
+    if (sizeEl) sizeEl.value = this.eraserSize;
+    if (sizeVal) sizeVal.textContent = this.eraserSize;
+    this._updateCursorSize();
   },
 
   _updateColorDisplay() {
@@ -567,5 +695,119 @@ PE.tools.transparency = {
     PE.overlay.clear();
     PE.log.success('Transparency applied');
     this._updateMakeTransparentButton();
+  },
+
+  // ---- Eraser ----
+  _eventToImageCoord(e) {
+    const s = PE.state;
+    const rect = PE.dom.container.getBoundingClientRect();
+    const x = (e.clientX - rect.left - s.panX) / s.zoom;
+    const y = (e.clientY - rect.top - s.panY) / s.zoom;
+    return { x, y };
+  },
+
+  _handlePointerDown(e) {
+    if (e.button !== 0) return;
+    if (PE.zoom.spaceDown) return;
+    if (this.subTool !== 'eraser') return;
+    if (!PE.state.imageData) return;
+
+    const s = PE.state;
+    const { x, y } = this._eventToImageCoord(e);
+    if (x < 0 || x >= s.imgWidth || y < 0 || y >= s.imgHeight) return;
+
+    e.preventDefault();
+    // Snapshot the pre-stroke image so global Ctrl+Z restores it as one step.
+    PE.history.pushUndo();
+    // The flood-fill selection no longer reflects the pixels under it.
+    if (s.selectionMask) {
+      s.selectionMask = null;
+      s.borderDist = null;
+      PE.overlay.clear();
+      this._updateMakeTransparentButton();
+    }
+
+    this._drawing = true;
+    this._lastX = x;
+    this._lastY = y;
+    this._eraseDab(x, y);
+
+    try { PE.dom.container.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  },
+
+  _handlePointerMove(e) {
+    // Always track the cursor preview, even when not stroking.
+    this._positionCursor(e);
+    if (!this._drawing) return;
+
+    const { x, y } = this._eventToImageCoord(e);
+    const dx = x - this._lastX;
+    const dy = y - this._lastY;
+    const dist = Math.hypot(dx, dy);
+    const spacing = Math.max(1, this.eraserSize * 0.2);
+    const steps = Math.max(1, Math.ceil(dist / spacing));
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      this._eraseDab(this._lastX + dx * t, this._lastY + dy * t);
+    }
+    this._lastX = x;
+    this._lastY = y;
+  },
+
+  _handlePointerUp(e) {
+    if (!this._drawing) return;
+    this._drawing = false;
+    this._syncImageData();
+    try { PE.dom.container.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  },
+
+  _eraseDab(x, y) {
+    const ctx = PE.dom.mainCtx;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(x, y, this.eraserSize / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  },
+
+  _syncImageData() {
+    const s = PE.state;
+    s.imageData = PE.dom.mainCtx.getImageData(0, 0, s.imgWidth, s.imgHeight);
+  },
+
+  // ---- Brush preview cursor ----
+  _createCursor() {
+    if (this._cursorEl) return;
+    const el = document.createElement('div');
+    el.className = 'marker-cursor eraser';
+    PE.dom.container.appendChild(el);
+    this._cursorEl = el;
+    this._updateCursorSize();
+  },
+
+  _destroyCursor() {
+    if (this._cursorEl) {
+      this._cursorEl.remove();
+      this._cursorEl = null;
+    }
+  },
+
+  _showCursor() { if (this._cursorEl) this._cursorEl.classList.add('visible'); },
+  _hideCursor() { if (this._cursorEl) this._cursorEl.classList.remove('visible'); },
+
+  _updateCursorSize() {
+    if (!this._cursorEl) return;
+    const size = Math.max(2, this.eraserSize * PE.state.zoom);
+    this._cursorEl.style.width  = `${size}px`;
+    this._cursorEl.style.height = `${size}px`;
+  },
+
+  _positionCursor(e) {
+    if (!this._cursorEl) return;
+    const rect = PE.dom.container.getBoundingClientRect();
+    this._cursorEl.style.left = `${e.clientX - rect.left}px`;
+    this._cursorEl.style.top  = `${e.clientY - rect.top}px`;
   },
 };
